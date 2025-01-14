@@ -1,10 +1,10 @@
-import torch
-import numpy as np
+import torch as _torch
+import numpy as _np
 from . import _internal
 from . import _maps
 from . import _functions
-import vulky as vk
-import typing
+import vulky as _vk
+import typing as _typing
 
 
 class Singleton(object):
@@ -32,7 +32,7 @@ class Boundary(_maps.MapBase):
 class MeshBoundary(Boundary):
     __extension_info__ = dict(
         parameters=dict(
-            mesh_ads=torch.int64,
+            mesh_ads=_torch.int64,
         ),
         generics=dict(
             INPUT_DIM=6,  # x, w
@@ -61,8 +61,8 @@ class GroupBoundary(Boundary):
     """
     __extension_info__ = dict(
         parameters=dict(
-            group_ads=torch.int64,
-            patches=[-1, torch.int64]
+            group_ads=_torch.int64,
+            patches=[-1, _torch.int64]
         ),
         dynamics=[(6, 16)],
         generics=dict(
@@ -99,7 +99,7 @@ class Geometry(_maps.MapBase):
 
     # @staticmethod
     # def _build_corners_for_aabb(bmin, bmax):
-    #     return torch.tensor([
+    #     return _torch.tensor([
     #         [bmin[0], bmin[1], bmin[2]],
     #         [bmin[0], bmin[1], bmax[2]],
     #         [bmin[0], bmax[1], bmin[2]],
@@ -121,8 +121,8 @@ class Geometry(_maps.MapBase):
 
     # def __init__(self, *args, **generics):
     #     super().__init__(*args, **generics)
-    #     # self.object_bmin = torch.nn.Parameter(bmin, requires_grad=False)
-    #     # self.object_bmax = torch.nn.Parameter(bmax, requires_grad=False)
+    #     # self.object_bmin = _torch.nn.Parameter(bmin, requires_grad=False)
+    #     # self.object_bmax = _torch.nn.Parameter(bmax, requires_grad=False)
 
     # def object_aabb(self):
     #     '''
@@ -144,11 +144,11 @@ class Geometry(_maps.MapBase):
     #     return self._transform
 
     @staticmethod
-    def _create_patch_buffer(callable: _maps.MapBase, mesh_info_buffer: typing.Optional[vk.Buffer] = None):
-        buf = vk.object_buffer(layout=vk.Layout.from_structure(
-            vk.LayoutAlignment.SCALAR,
-            callable_map=torch.int64,
-            mesh_info=torch.int64,
+    def _create_patch_buffer(callable: _maps.MapBase, mesh_info_buffer: _typing.Optional[_vk.Buffer] = None):
+        buf = _vk.object_buffer(layout=_vk.Layout.from_structure(
+            _vk.LayoutAlignment.SCALAR,
+            callable_map=_torch.int64,
+            mesh_info=_torch.int64,
         )
         )
         with buf as b:
@@ -162,19 +162,19 @@ class Geometry(_maps.MapBase):
         '''
         return len(self.per_patch_info())
 
-    def per_patch_info(self) -> typing.List[int]:
+    def per_patch_info(self) -> _typing.List[int]:
         '''
         Gets the list of patch-descriptor references
         '''
         pass
 
-    def per_patch_geometry(self) -> typing.List[int]:
+    def per_patch_geometry(self) -> _typing.List[int]:
         '''
         Gets the list of patch geometry handles
         '''
         pass
 
-    def update_patch_transforms(self, transforms: torch.Tensor):
+    def update_patch_transforms(self, transforms: _torch.Tensor):
         pass
 
     def update_ads_if_necessary(self) -> bool:
@@ -187,7 +187,7 @@ class Geometry(_maps.MapBase):
         self.update_ads_if_necessary()
         return super()._pre_eval(include_grads)
 
-    def transformed(self, T: torch.Tensor) -> 'TransformedGeometry':
+    def transformed(self, T: _torch.Tensor) -> 'TransformedGeometry':
         return TransformedGeometry(self, T)
 
 
@@ -202,35 +202,35 @@ class TransformedGeometry(Geometry):
         path=_internal.__INCLUDE_PATH__ + '/maps/geometry_transformed.h'
     )
 
-    def __init__(self, base_geometry: Geometry, initial_transform: typing.Optional[torch.Tensor] = None):
+    def __init__(self, base_geometry: Geometry, initial_transform: _typing.Optional[_torch.Tensor] = None):
         super().__init__()
         self.base_geometry = base_geometry
         if initial_transform is None:
-            initial_transform = torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]])
+            initial_transform = _torch.tensor([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, 0.0]])
         self.transform = _maps.parameter(initial_transform)
         self.transform_check = _maps.TensorCheck(initial_value=self.transform)
 
-    def per_patch_geometry(self) -> typing.List[int]:
+    def per_patch_geometry(self) -> _typing.List[int]:
         return self.base_geometry.per_patch_geometry()
 
-    def per_patch_info(self) -> typing.List[int]:
+    def per_patch_info(self) -> _typing.List[int]:
         return self.base_geometry.per_patch_info()
 
     def update_ads_if_necessary(self) -> bool:
         return self.transform_check.changed(self.transform) | self.base_geometry.update_ads_if_necessary()
 
-    def update_patch_transforms(self, transforms: torch.Tensor):
-        with torch.no_grad():
+    def update_patch_transforms(self, transforms: _torch.Tensor):
+        with _torch.no_grad():
             for t in transforms:
-                t.copy_(vk.mat3x4.composite(self.transform.T, t))
+                t.copy_(_vk.mat3x4.composite(self.transform.T, t))
         self.base_geometry.update_patch_transforms(transforms)
 
 
 class MeshGeometry(Geometry):
     __extension_info__ = dict(
         parameters=dict(
-            mesh_ads=torch.int64,
-            mesh_info=torch.int64,
+            mesh_ads=_torch.int64,
+            mesh_info=_torch.int64,
         ),
         generics=dict(
             INPUT_DIM=6,  # x, w
@@ -240,26 +240,26 @@ class MeshGeometry(Geometry):
     )
 
     @staticmethod
-    def compute_normals(positions: torch.Tensor, indices: torch.Tensor):
-        normals = torch.zeros_like(positions)
+    def compute_normals(positions: _torch.Tensor, indices: _torch.Tensor):
+        normals = _torch.zeros_like(positions)
         indices = indices.long()  # to be used
         P0 = positions[indices[:, 0]]
         P1 = positions[indices[:, 1]]
         P2 = positions[indices[:, 2]]
-        V1 = vk.vec3.normalize(P1 - P0)
-        V2 = vk.vec3.normalize(P2 - P0)
-        N = torch.cross(V1, V2)  # do not normalize for proper weight
+        V1 = _vk.vec3.normalize(P1 - P0)
+        V2 = _vk.vec3.normalize(P2 - P0)
+        N = _torch.cross(V1, V2)  # do not normalize for proper weight
         indices0 = indices[:, 0].unsqueeze(-1).repeat(1, 3)
         normals.scatter_add_(0, indices0, N)
         indices1 = indices[:, 1].unsqueeze(-1).repeat(1, 3)
         normals.scatter_add_(0, indices1, N)
         indices2 = indices[:, 2].unsqueeze(-1).repeat(1, 3)
         normals.scatter_add_(0, indices2, N)
-        return normals / torch.sqrt((normals ** 2).sum(-1, keepdim=True))
+        return normals / _torch.sqrt((normals ** 2).sum(-1, keepdim=True))
 
     @staticmethod
     def load_obj(path: str) -> 'MeshGeometry':
-        obj = vk.load_obj(path)
+        obj = _vk.load_obj(path)
         pos = obj['buffers']['P']
         bmin, _ = pos.min(dim=0)
         bmax, _ = pos.max(dim=0)
@@ -269,7 +269,7 @@ class MeshGeometry(Geometry):
     @staticmethod
     def box():
         return MeshGeometry(
-            positions=torch.tensor(
+            positions=_torch.tensor(
                 [
                     # Neg z
                     [-0.5, -0.5, -0.5],  # 0
@@ -305,7 +305,7 @@ class MeshGeometry(Geometry):
                 ],
                 device=_internal.device()
             ),
-            # positions=torch.tensor(
+            # positions=_torch.tensor(
             #     [
             #         # Neg z
             #         [-1.0, -1.0, -1.0],  # 0
@@ -341,7 +341,7 @@ class MeshGeometry(Geometry):
             #     ],
             #     device=device()
             # ),
-            indices=torch.tensor(
+            indices=_torch.tensor(
                 [
                     [0, 2, 3],
                     [0, 3, 1],
@@ -357,8 +357,8 @@ class MeshGeometry(Geometry):
                     [16, 19, 17],
                     [20, 23, 22],
                     [20, 21, 23],
-                ], dtype=torch.int32, device=_internal.device()
-            ), normals=None, uvs=torch.tensor([
+                ], dtype=_torch.int32, device=_internal.device()
+            ), normals=None, uvs=_torch.tensor([
                 [0.0, 0.0],
                 [0.0, 1.0],
                 [1.0, 0.0],
@@ -392,28 +392,28 @@ class MeshGeometry(Geometry):
             normalize=True
         )
 
-    def __init__(self, positions: torch.Tensor, normals: typing.Optional[torch.Tensor] = None,
-                 uvs: typing.Optional[torch.Tensor] = None, indices: typing.Optional[torch.Tensor] = None, normalize: bool = False, compute_normals: bool = True):
+    def __init__(self, positions: _torch.Tensor, normals: _typing.Optional[_torch.Tensor] = None,
+                 uvs: _typing.Optional[_torch.Tensor] = None, indices: _typing.Optional[_torch.Tensor] = None, normalize: bool = False, compute_normals: bool = True):
         # if indices is None:  # assume default indices for all positions
         #     assert len(positions) % 3 == 0, 'If no indices is provided, positions should be divisible by 3'
-        #     indices = torch.arange(0, len(positions), 1, dtype=torch.int32, device=positions.device).view(-1, 3)
+        #     indices = _torch.arange(0, len(positions), 1, dtype=_torch.int32, device=positions.device).view(-1, 3)
         if normals is None and compute_normals:
             normals = MeshGeometry.compute_normals(positions, indices)
         super().__init__()
         if normalize:
-            with torch.no_grad():
+            with _torch.no_grad():
                 bmin, _ = positions.min(dim=0)
                 bmax, _ = positions.max(dim=0)
                 positions = (positions - bmin - (bmax - bmin) * 0.5) * 2 / (bmax - bmin).max()
-        self.mesh_info_buffer = vk.object_buffer(layout=vk.Layout.from_structure(
-            vk.LayoutAlignment.SCALAR,
+        self.mesh_info_buffer = _vk.object_buffer(layout=_vk.Layout.from_structure(
+            _vk.LayoutAlignment.SCALAR,
             positions=_maps.ParameterDescriptorLayoutType,
             normals=_maps.ParameterDescriptorLayoutType,
             coordinates=_maps.ParameterDescriptorLayoutType,
             tangents=_maps.ParameterDescriptorLayoutType,
             binormals=_maps.ParameterDescriptorLayoutType,
             indices=_maps.ParameterDescriptorLayoutType
-        ), memory=vk.MemoryLocation.GPU, usage=vk.BufferUsage.STORAGE)
+        ), memory=_vk.MemoryLocation.GPU, usage=_vk.BufferUsage.STORAGE)
         self.mesh_info_module = _maps.StructModule(self.mesh_info_buffer.accessor)
         self.mesh_info_module.positions = _maps.parameter(positions)
         self.mesh_info_module.normals = _maps.parameter(normals)
@@ -426,20 +426,20 @@ class MeshGeometry(Geometry):
         self._per_patch_info = [self._patch_info.device_ptr]
         # create bottom ads
         # Create vertices for the triangle
-        vertices = vk.structured_buffer(
+        vertices = _vk.structured_buffer(
             count=len(positions),
             element_description=dict(
-                position=vk.vec3
+                position=_vk.vec3
             ),
-            usage=vk.BufferUsage.RAYTRACING_RESOURCE,
-            memory=vk.MemoryLocation.GPU
+            usage=_vk.BufferUsage.RAYTRACING_RESOURCE,
+            memory=_vk.MemoryLocation.GPU
         )
         # Create indices for the faces
-        indices_buffer = vk.structured_buffer(
+        indices_buffer = _vk.structured_buffer(
             count=len(indices) * 3,
             element_description=int,
-            usage=vk.BufferUsage.RAYTRACING_RESOURCE,
-            memory=vk.MemoryLocation.GPU
+            usage=_vk.BufferUsage.RAYTRACING_RESOURCE,
+            memory=_vk.MemoryLocation.GPU
         )
         # vertices.load([ vec3(-0.6, 0, 0), vec3(0.6, 0, 0), vec3(0, 1, 0)])
         with vertices.map('in') as v:
@@ -447,18 +447,18 @@ class MeshGeometry(Geometry):
             v.position = positions
         indices_buffer.load(indices.view(-1))
         # Create a triangle collection
-        self.geometry = vk.triangle_collection()
+        self.geometry = _vk.triangle_collection()
         self.geometry.append(vertices=vertices, indices=indices_buffer)
         # Create a bottom ads with the geometry
-        self.geometry_ads = vk.ads_model(self.geometry)
+        self.geometry_ads = _vk.ads_model(self.geometry)
 
         self._per_patch_geometry = [self.geometry_ads.handle]
 
         # Create an instance buffer for the top level objects
-        self.scene_buffer = vk.instance_buffer(1, vk.MemoryLocation.GPU)
+        self.scene_buffer = _vk.instance_buffer(1, _vk.MemoryLocation.GPU)
         with self.scene_buffer.map('in', clear=True) as s:
             s.flags = 0
-            s.mask8_idx24 = vk.asint32(0xFF000000)
+            s.mask8_idx24 = _vk.asint32(0xFF000000)
             # By default, all other values of the instance are filled
             # for instance, transform with identity transform and 0 offset.
             # mask with 255
@@ -468,10 +468,10 @@ class MeshGeometry(Geometry):
             s.accelerationStructureReference = self.geometry_ads.handle
 
         # Create the top level ads
-        self.scene_ads = vk.ads_scene(self.scene_buffer)
+        self.scene_ads = _vk.ads_scene(self.scene_buffer)
 
         # scratch buffer used to build the ads shared for all ads'
-        self.scratch_buffer = vk.scratch_buffer(self.geometry_ads, self.scene_ads)
+        self.scratch_buffer = _vk.scratch_buffer(self.geometry_ads, self.scene_ads)
         self.position_checker = _maps.TensorCheck()
         self.mesh_ads = self.scene_ads.handle
         self.update_ads_if_necessary()
@@ -482,7 +482,7 @@ class MeshGeometry(Geometry):
 
     def update_ads_if_necessary(self) -> bool:
         if self.position_checker.changed(self.mesh_info_module.positions):
-            with vk.raytracing_manager() as man:
+            with _vk.raytracing_manager() as man:
                 man.build_ads(self.geometry_ads, self.scratch_buffer)
                 man.build_ads(self.scene_ads, self.scratch_buffer)
             return True
@@ -494,13 +494,13 @@ class MeshGeometry(Geometry):
     def get_boundary(self) -> 'Boundary':
         return MeshBoundary(self)
 
-    def per_patch_geometry(self) -> typing.List[int]:
+    def per_patch_geometry(self) -> _typing.List[int]:
         return self._per_patch_geometry
 
-    def per_patch_info(self) -> typing.List[int]:
+    def per_patch_info(self) -> _typing.List[int]:
         return self._per_patch_info
 
-    def update_patch_transforms(self, transforms: torch.Tensor):
+    def update_patch_transforms(self, transforms: _torch.Tensor):
         return
 
 
@@ -508,8 +508,8 @@ class GroupGeometry(Geometry):
     __extension_info__ = dict(
         dynamics=[(6, 16)],  # can call dynamically to other geometries
         parameters=dict(
-            group_ads=torch.int64,
-            patches=[-1, torch.int64]  # flatten representation of all patches
+            group_ads=_torch.int64,
+            patches=[-1, _torch.int64]  # flatten representation of all patches
         ),
         generics=dict(
             INPUT_DIM=6,  # x, w
@@ -520,7 +520,7 @@ class GroupGeometry(Geometry):
 
 
     @staticmethod
-    def _flatten_patches(geometries: typing.Iterable[Geometry]):
+    def _flatten_patches(geometries: _typing.Iterable[Geometry]):
         patch_geometries = []
         patch_infos = []
         for g in geometries:
@@ -543,32 +543,32 @@ class GroupGeometry(Geometry):
         is_only_meshes = 1 if all(all_meshes(geom) for geom in geometries) else 0
         super().__init__(len(_per_patch_infos), ONLY_MESHES=is_only_meshes)
         self._per_patch_infos, self._per_patch_geometries = _per_patch_infos, _per_patch_geometries
-        self._per_patch_geometries_tensor = torch.tensor(_per_patch_geometries, dtype=torch.int64).unsqueeze(-1)
-        self.geometries_module_list = torch.nn.ModuleList(geometries)
+        self._per_patch_geometries_tensor = _torch.tensor(_per_patch_geometries, dtype=_torch.int64).unsqueeze(-1)
+        self.geometries_module_list = _torch.nn.ModuleList(geometries)
         self.geometries = geometries
         for i, patch in enumerate(self._per_patch_infos):
             self.patches[i] = patch
         self.is_only_meshes = is_only_meshes
         # Create an instance buffer for the top level objects
-        self.scene_buffer = vk.instance_buffer(len(self._per_patch_geometries), vk.MemoryLocation.GPU)
+        self.scene_buffer = _vk.instance_buffer(len(self._per_patch_geometries), _vk.MemoryLocation.GPU)
         # Create the top level ads
-        self.scene_ads = vk.ads_scene(self.scene_buffer)
+        self.scene_ads = _vk.ads_scene(self.scene_buffer)
         # scratch buffer used to build the ads shared for all ads'
-        self.scratch_buffer = vk.scratch_buffer(self.scene_ads)
+        self.scratch_buffer = _vk.scratch_buffer(self.scene_ads)
         self.group_ads = self.scene_ads.handle
-        self.cached_transforms = torch.empty(len(self._per_patch_geometries), 3, 4)
+        self.cached_transforms = _torch.empty(len(self._per_patch_geometries), 3, 4)
         self.cached_transforms[:] = GroupGeometry.__identity__
         self._update_ads()
 
-    __identity__ = torch.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]])
+    __identity__ = _torch.tensor([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0]])
 
-    def per_patch_geometry(self) -> typing.List[int]:
+    def per_patch_geometry(self) -> _typing.List[int]:
         return self._per_patch_geometries
 
-    def per_patch_info(self) -> typing.List[int]:
+    def per_patch_info(self) -> _typing.List[int]:
         return self._per_patch_infos
 
-    def update_patch_transforms(self, transforms: torch.Tensor):
+    def update_patch_transforms(self, transforms: _torch.Tensor):
         offset = 0
         for g in self.geometries:
             p = len(g)
@@ -576,16 +576,16 @@ class GroupGeometry(Geometry):
             offset += p
 
     def _update_ads(self):
-        current_transforms = torch.empty(len(self._per_patch_geometries), 3, 4)
+        current_transforms = _torch.empty(len(self._per_patch_geometries), 3, 4)
         current_transforms[:] = GroupGeometry.__identity__
         self.update_patch_transforms(current_transforms)
         with self.scene_buffer.map('in') as s:
             # notice that these updates are serial
             s.flags = 0
-            s.mask8_idx24 = vk.asint32(0xFF000000)
+            s.mask8_idx24 = _vk.asint32(0xFF000000)
             s.accelerationStructureReference = self._per_patch_geometries_tensor
             s.transform = current_transforms
-        with vk.raytracing_manager() as man:
+        with _vk.raytracing_manager() as man:
             man.build_ads(self.scene_ads, self.scratch_buffer)
         self.cached_transforms = current_transforms
 
@@ -593,7 +593,7 @@ class GroupGeometry(Geometry):
         any_geometry_changed = False
         for g in self.geometries:
             any_geometry_changed |= g.update_ads_if_necessary()
-        if any_geometry_changed: # or not torch.equal(current_transforms, self.cached_transforms):
+        if any_geometry_changed: # or not _torch.equal(current_transforms, self.cached_transforms):
             self._update_ads()
 
     def get_boundary(self) -> 'Boundary':
@@ -710,11 +710,11 @@ class XREnvironment(Environment):
 class XREnvironmentSamplerPDF(EnvironmentSamplerPDF):
     __extension_info__ = EnvironmentSamplerPDF.create_extension_info(
         _internal.__INCLUDE_PATH__ + '/maps/environment_sampler_pdf_xr.h',
-        densities=torch.Tensor,  # quadtree probabilities
+        densities=_torch.Tensor,  # quadtree probabilities
         levels=int,  # Number of levels of the quadtree
     )
 
-    def __init__(self, densities: torch.Tensor, levels: int):
+    def __init__(self, densities: _torch.Tensor, levels: int):
         super().__init__()
         self.densities = densities
         self.levels = levels
@@ -724,11 +724,11 @@ class XREnvironmentSampler(EnvironmentSampler):
     __extension_info__ = EnvironmentSampler.create_extension_info(
         _internal.__INCLUDE_PATH__+'/maps/environment_sampler_xr.h',
         environment=_maps.MapBase,  # Map with ray-dependent radiances
-        densities=torch.Tensor,  # quadtree probabilities
+        densities=_torch.Tensor,  # quadtree probabilities
         levels=int,  # Number of levels of the quadtree
     )
 
-    def __init__(self, environment_img: _maps.MapBase, quadtree: torch.Tensor, levels: int):
+    def __init__(self, environment_img: _maps.MapBase, quadtree: _torch.Tensor, levels: int):
         environment_img = environment_img.cast(2, 3)
         super().__init__()
         self.environment_img = environment_img
@@ -744,11 +744,11 @@ class XREnvironmentSampler(EnvironmentSampler):
         return self.pdf
 
     @staticmethod
-    def from_tensor(environment_tensor: torch.Tensor, levels: int = 10) -> 'XREnvironmentSampler':
+    def from_tensor(environment_tensor: _torch.Tensor, levels: int = 10) -> 'XREnvironmentSampler':
         resolution = 1 << levels
         densities = _functions.resample_img(environment_tensor.sum(-1, keepdim=True), (resolution, resolution))
         for py in range(resolution):
-            w = np.cos(py * np.pi / resolution) - np.cos((py + 1) * np.pi / resolution)
+            w = _np.cos(py * _np.pi / resolution) - _np.cos((py + 1) * _np.pi / resolution)
             densities[py, :, :] *= w
         densities /= max(densities.sum(), 0.00000001)
         quadtree = _functions.create_density_quadtree(densities)
@@ -766,7 +766,7 @@ class UniformEnvironmentSampler(EnvironmentSampler):
         self.environment = environment.cast(*Environment.signature())
 
     def get_pdf(self) -> EnvironmentSamplerPDF:
-        return _maps.const[0.25 / np.pi]
+        return _maps.const[0.25 / _np.pi]
 
     def get_environment(self) -> _maps.MapBase:
         return self.environment
@@ -872,10 +872,10 @@ class SurfaceScatteringSampler(_maps.MapBase):  # win, N, C, P, T, B -> wout, W/
     def signature():
         return (20, 7)
 
-    def get_scattering(self) -> typing.Union[_maps.MapBase, SurfaceScattering]:
+    def get_scattering(self) -> _typing.Union[_maps.MapBase, SurfaceScattering]:
         raise NotImplementedError()
 
-    def get_pdf(self) -> typing.Union[_maps.MapBase, SurfaceScatteringSamplerPDF]:
+    def get_pdf(self) -> _typing.Union[_maps.MapBase, SurfaceScatteringSamplerPDF]:
         raise NotImplementedError()
 
 
@@ -1346,9 +1346,9 @@ class SurfaceEmission(_maps.MapBase):
     @staticmethod
     def create_extension_info(
             fw_code: str,
-            bw_code: typing.Optional[str] = None,
-            external_code: typing.Optional[str] = None,
-            parameters: typing.Optional[typing.Dict] = None,
+            bw_code: _typing.Optional[str] = None,
+            external_code: _typing.Optional[str] = None,
+            parameters: _typing.Optional[_typing.Dict] = None,
     ):
         if parameters is None:
             parameters = { }
@@ -1543,7 +1543,7 @@ class EnvironmentGathering(SurfaceGathering):
         surface_scattering_sampler=_maps.MapBase,
     )
 
-    def __init__(self, environment_sampler: EnvironmentSampler, visibility: _maps.MapBase, surface_scattering_sampler: typing.Optional[SurfaceScatteringSampler] = None):
+    def __init__(self, environment_sampler: EnvironmentSampler, visibility: _maps.MapBase, surface_scattering_sampler: _typing.Optional[SurfaceScatteringSampler] = None):
         super().__init__()
         self.environment = environment_sampler.get_environment()
         self.environment_sampler = environment_sampler
@@ -1553,7 +1553,7 @@ class EnvironmentGathering(SurfaceGathering):
 
 
 class SurfaceMaterial:
-    def __init__(self, sampler: typing.Optional[SurfaceScatteringSampler] = None, emission: typing.Optional[SurfaceEmission] = None):
+    def __init__(self, sampler: _typing.Optional[SurfaceScatteringSampler] = None, emission: _typing.Optional[SurfaceEmission] = None):
         self.sampler = sampler
         self.sampler_pdf = None if sampler is None else sampler.get_pdf()
         self.scattering = None if sampler is None else sampler.get_scattering()
@@ -1602,7 +1602,7 @@ class MediumPathIntegrator(_maps.MapBase):
     def signature():
         return (7, 12)
 
-    def __init__(self, gathering: typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
+    def __init__(self, gathering: _typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
         if gathering is None:
            medium_filter &= 1  # only scatter
         super().__init__(MEDIUM_FILTER = medium_filter)
@@ -1620,7 +1620,7 @@ class DTMediumPathIntegrator(MediumPathIntegrator):
         majorant=_maps.ParameterDescriptor,
     )
 
-    def __init__(self, sigma: _maps.MapBase, majorant: torch.Tensor, scattering_albedo: typing.Optional[_maps.MapBase] = None, phase_sampler: typing.Optional[_maps.MapBase] = None, gathering: typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
+    def __init__(self, sigma: _maps.MapBase, majorant: _torch.Tensor, scattering_albedo: _typing.Optional[_maps.MapBase] = None, phase_sampler: _typing.Optional[_maps.MapBase] = None, gathering: _typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
         if scattering_albedo is None or phase_sampler is None:
             medium_filter &= 2
             scattering_albedo = _maps.ZERO
@@ -1644,11 +1644,11 @@ class DTVolumePathIntegrator(MediumPathIntegrator):
 
     def __init__(self,
                  sigma: _maps.MapBase,
-                 majorant: torch.Tensor,
+                 majorant: _torch.Tensor,
                  boundaries: Boundary,
-                 scattering_albedo: typing.Optional[_maps.MapBase] = None,
-                 phase_sampler: typing.Optional[_maps.MapBase] = None,
-                 gathering: typing.Optional[_maps.MapBase] = None,
+                 scattering_albedo: _typing.Optional[_maps.MapBase] = None,
+                 phase_sampler: _typing.Optional[_maps.MapBase] = None,
+                 gathering: _typing.Optional[_maps.MapBase] = None,
                  medium_filter: int = 3):
         if scattering_albedo is None or phase_sampler is None:
             medium_filter &= 2
@@ -1675,11 +1675,11 @@ class DSVolumePathIntegrator(MediumPathIntegrator):
 
     def __init__(self,
                  sigma: _maps.MapBase,
-                 majorant: torch.Tensor,
+                 majorant: _torch.Tensor,
                  boundaries: Boundary,
-                 scattering_albedo: typing.Optional[_maps.MapBase] = None,
-                 phase_sampler: typing.Optional[_maps.MapBase] = None,
-                 gathering: typing.Optional[_maps.MapBase] = None,
+                 scattering_albedo: _typing.Optional[_maps.MapBase] = None,
+                 phase_sampler: _typing.Optional[_maps.MapBase] = None,
+                 gathering: _typing.Optional[_maps.MapBase] = None,
                  ds_epsilon: float = 0.1,
                  medium_filter: int = 3):
         if scattering_albedo is None or phase_sampler is None:
@@ -1705,7 +1705,7 @@ class RTMediumPathIntegrator(MediumPathIntegrator):
         majorant=_maps.ParameterDescriptor,
     )
 
-    def __init__(self, sigma: _maps.MapBase, majorant: torch.Tensor, scattering_albedo: typing.Optional[_maps.MapBase] = None, phase_sampler: typing.Optional[_maps.MapBase] = None, gathering: typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
+    def __init__(self, sigma: _maps.MapBase, majorant: _torch.Tensor, scattering_albedo: _typing.Optional[_maps.MapBase] = None, phase_sampler: _typing.Optional[_maps.MapBase] = None, gathering: _typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
         if scattering_albedo is None or phase_sampler is None:
             medium_filter &= 2
             scattering_albedo = _maps.ZERO
@@ -1726,11 +1726,11 @@ class HomogeneousMediumPathIntegrator(MediumPathIntegrator):
         phase_sampler=_maps.MapBase
     )
 
-    def __init__(self, sigma: torch.Tensor, scattering_albedo: typing.Optional[torch.Tensor] = None,
-                 phase_sampler: typing.Optional[_maps.MapBase] = None, gathering: typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
+    def __init__(self, sigma: _torch.Tensor, scattering_albedo: _typing.Optional[_torch.Tensor] = None,
+                 phase_sampler: _typing.Optional[_maps.MapBase] = None, gathering: _typing.Optional[_maps.MapBase] = None, medium_filter: int = 3):
         if scattering_albedo is None or phase_sampler is None:
             medium_filter &= 2
-            scattering_albedo = torch.zeros(3, device=_internal.device())
+            scattering_albedo = _torch.zeros(3, device=_internal.device())
             phase_sampler = _maps.ZERO
         super().__init__(gathering, medium_filter)
         self.sigma = _maps.parameter(sigma)
@@ -1743,8 +1743,8 @@ class HomogeneousMediumPathIntegrator(MediumPathIntegrator):
 #         generics=dict(INPUT_DIM=6, OUTPUT_DIM=3),
 #         dynamics=[(3, 3), (6, 3)],
 #         parameters=dict(
-#             scattering_albedo=torch.int64,
-#             emission=torch.int64
+#             scattering_albedo=_torch.int64,
+#             emission=_torch.int64
 #         ),
 #         code=f"""
 #     FORWARD {{
@@ -1818,7 +1818,7 @@ class VolumeEmissionGathering(VolumeGathering):
         emission=_maps.MapBase
     )
 
-    def __init__(self, scattering_albedo: typing.Optional[_maps.MapBase], emission: typing.Optional[_maps.MapBase]):
+    def __init__(self, scattering_albedo: _typing.Optional[_maps.MapBase], emission: _typing.Optional[_maps.MapBase]):
         super().__init__()
         self.scattering_albedo = _maps.ZERO if scattering_albedo is None else scattering_albedo
         self.emission = _maps.ZERO if emission is None else emission
@@ -1833,7 +1833,7 @@ class VolumeEnvironmentGathering(VolumeGathering):
         homogeneous_phase=_maps.MapBase,
     )
 
-    def __init__(self, environment_sampler: EnvironmentSampler, visibility: _maps.MapBase, scattering_albedo: typing.Optional[_maps.MapBase], homogeneous_phase: typing.Optional[_maps.MapBase]):
+    def __init__(self, environment_sampler: EnvironmentSampler, visibility: _maps.MapBase, scattering_albedo: _typing.Optional[_maps.MapBase], homogeneous_phase: _typing.Optional[_maps.MapBase]):
         super().__init__()
         self.environment_sampler = environment_sampler
         self.visibility = visibility.cast(6, 1)
@@ -1847,8 +1847,8 @@ class VolumeEnvironmentGathering(VolumeGathering):
 #         generics=dict(INPUT_DIM=6, OUTPUT_DIM=3),
 #         dynamics=[(3, 3), (6, 3)],
 #         parameters=dict(
-#             scattering_albedo=torch.int64,
-#             emission=torch.int64
+#             scattering_albedo=_torch.int64,
+#             emission=_torch.int64
 #         ),
 #         code=f"""
 #         FORWARD {{
@@ -1885,8 +1885,8 @@ class PhaseSamplerPDF(_maps.MapBase):
     __extension_info__ = None
     @staticmethod
     def create_extension_info(fw_code: str,
-                              bw_code: typing.Optional[str] = None,
-                              parameters: typing.Optional[typing.Dict] = None):
+                              bw_code: _typing.Optional[str] = None,
+                              parameters: _typing.Optional[_typing.Dict] = None):
         if bw_code is None:
             bw_code = ''
         if parameters is None:
@@ -1913,7 +1913,7 @@ class PhaseSamplerPDF(_maps.MapBase):
 class PhaseSampler(_maps.MapBase):
     __extension_info__ = None
     @staticmethod
-    def create_extension_info(fw_code: str, bw_code: typing.Optional[str] = None, parameters: typing.Optional[typing.Dict]= None):
+    def create_extension_info(fw_code: str, bw_code: _typing.Optional[str] = None, parameters: _typing.Optional[_typing.Dict]= None):
         if bw_code is None:
             bw_code = ''
         if parameters is None:
@@ -1976,7 +1976,7 @@ class HGPhaseSamplerPDF(PhaseSamplerPDF):
     pdf = hg_phase_eval(win, wout, g);
     """)
 
-    def __init__(self, g: torch.Tensor):
+    def __init__(self, g: _torch.Tensor):
         super().__init__()
         self.g = _maps.parameter(g)
 
@@ -1992,7 +1992,7 @@ class HGPhaseSampler(PhaseSampler):
     weight = 1.0; // Importance sampled function
         """
     )
-    def __init__(self, g: torch.Tensor):
+    def __init__(self, g: _torch.Tensor):
         super().__init__()
         self.g = _maps.parameter(g)
         self.pdf = HGPhaseSamplerPDF(self.g)
@@ -2006,13 +2006,13 @@ class HGPhaseSampler(PhaseSampler):
 
 class MediumMaterial:
     def __init__(self,
-                 path_integrator_factory: typing.Callable[[typing.Optional[_maps.MapBase],
-                 typing.Optional[Boundary], int], _maps.MapBase],
-                 scattering_albedo: typing.Optional[_maps.MapBase] = None,
-                 phase_sampler: typing.Optional['PhaseSampler'] = None,
-                 emission: typing.Optional[_maps.MapBase] = None,
+                 path_integrator_factory: _typing.Callable[[_typing.Optional[_maps.MapBase],
+                 _typing.Optional[Boundary], int], _maps.MapBase],
+                 scattering_albedo: _typing.Optional[_maps.MapBase] = None,
+                 phase_sampler: _typing.Optional['PhaseSampler'] = None,
+                 emission: _typing.Optional[_maps.MapBase] = None,
                  enclosed: bool = False,
-                 custom_boundary: typing.Optional[Boundary] = None,
+                 custom_boundary: _typing.Optional[Boundary] = None,
                  volume_track: bool = True
                  ):
         self.path_integrator_factory = path_integrator_factory
@@ -2068,7 +2068,7 @@ class MediumMaterial:
 
 
 class HomogeneousMediumMaterial(MediumMaterial):
-    def __init__(self, sigma: typing.Union[torch.Tensor, float], scattering_albedo: typing.Optional[torch.Tensor] = None, phase_sampler: typing.Optional['PhaseSampler'] = None, emission: typing.Optional[_maps.MapBase] = None, enclosed: bool = False):
+    def __init__(self, sigma: _typing.Union[_torch.Tensor, float], scattering_albedo: _typing.Optional[_torch.Tensor] = None, phase_sampler: _typing.Optional['PhaseSampler'] = None, emission: _typing.Optional[_maps.MapBase] = None, enclosed: bool = False):
         super().__init__(
             lambda gathering, boundaries, filter: HomogeneousMediumPathIntegrator(
                 sigma=sigma,
@@ -2087,16 +2087,16 @@ class HomogeneousMediumMaterial(MediumMaterial):
 class HeterogeneousMediumMaterial(MediumMaterial):
     def __init__(self,
                  sigma: _maps.MapBase,
-                 scattering_albedo: typing.Optional[_maps.MapBase] = None,
-                 emission: typing.Optional[_maps.MapBase]=None,
-                 phase_sampler: typing.Optional['PhaseSampler'] = None,
-                 technique: typing.Literal['dt', 'ds', 'rt'] = 'dt',
+                 scattering_albedo: _typing.Optional[_maps.MapBase] = None,
+                 emission: _typing.Optional[_maps.MapBase]=None,
+                 phase_sampler: _typing.Optional['PhaseSampler'] = None,
+                 technique: _typing.Literal['dt', 'ds', 'rt'] = 'dt',
                  enclosed: bool = False,
-                 custom_boundary: typing.Optional[Boundary] = None,
+                 custom_boundary: _typing.Optional[Boundary] = None,
                  volume_track: bool = True,
                  **kwargs):
         if technique == 'dt':
-            assert 'majorant' in kwargs, "Delta tracking technique requires a majorant: torch.Tensor parameter"
+            assert 'majorant' in kwargs, "Delta tracking technique requires a majorant: _torch.Tensor parameter"
             def factory(gathering, boundaries, filter):
                 if boundaries is None:
                     return DTMediumPathIntegrator(
@@ -2118,7 +2118,7 @@ class HeterogeneousMediumMaterial(MediumMaterial):
                         medium_filter=filter
                     )
         elif technique == 'ds':
-            assert 'majorant' in kwargs, "Defensive tracking technique requires a majorant: torch.Tensor parameter"
+            assert 'majorant' in kwargs, "Defensive tracking technique requires a majorant: _torch.Tensor parameter"
             # assert 'ds_epsilon' in kwargs, "Defensive tracking technique requires a ds_epsilon: float parameter"
             def factory(gathering, boundaries, filter):
                 if boundaries is None:
@@ -2142,7 +2142,7 @@ class HeterogeneousMediumMaterial(MediumMaterial):
                         ds_epsilon=kwargs.get('ds_epsilon', 0.1)
                     )
         elif technique == 'rt':
-            assert 'majorant' in kwargs, "Delta tracking technique requires a majorant: torch.Tensor parameter"
+            assert 'majorant' in kwargs, "Delta tracking technique requires a majorant: _torch.Tensor parameter"
             def factory(gathering, boundaries, filter):
                 return RTMediumPathIntegrator(
                     sigma=sigma,
@@ -2167,17 +2167,17 @@ class HeterogeneousMediumMaterial(MediumMaterial):
 
 PTPatchInfo = _maps.map_struct(
     'PTPatchInfo',
-    surface_scattering_sampler=torch.int64,
-    surface_gathering=torch.int64,
-    inside_medium=torch.int64,
-    outside_medium=torch.int64
+    surface_scattering_sampler=_torch.int64,
+    surface_gathering=_torch.int64,
+    inside_medium=_torch.int64,
+    outside_medium=_torch.int64
 )
 
 
 VSPatchInfo = _maps.map_struct(
     'VSPatchInfo',
-    inside_medium=torch.int64,
-    outside_medium=torch.int64,
+    inside_medium=_torch.int64,
+    outside_medium=_torch.int64,
     surface_scatters = int,
     pad0 = int,
     pad1=int,
@@ -2200,10 +2200,10 @@ class SceneVisibility(_maps.MapBase):
     )
     def __init__(self,
         boundaries: Boundary,
-        surface_scatters: typing.Optional[typing.List[bool]] = None,
-        medium_integrator: typing.Optional[typing.List[MediumPathIntegrator]] = None,
-        inside_medium_indices: typing.Optional[typing.List[int]] = None,
-        outside_medium_indices: typing.Optional[typing.List[int]] = None,
+        surface_scatters: _typing.Optional[_typing.List[bool]] = None,
+        medium_integrator: _typing.Optional[_typing.List[MediumPathIntegrator]] = None,
+        inside_medium_indices: _typing.Optional[_typing.List[int]] = None,
+        outside_medium_indices: _typing.Optional[_typing.List[int]] = None,
     ):
         super().__init__(len(boundaries))
         self.boundaries = boundaries
@@ -2215,7 +2215,7 @@ class SceneVisibility(_maps.MapBase):
         if surface_scatters is not None:
             for i, ss in enumerate(surface_scatters):
                 self.patch_info[i].surface_scatters = 0 if not ss else 1
-        self.media_modules = torch.nn.ModuleList(medium_integrator)
+        self.media_modules = _torch.nn.ModuleList(medium_integrator)
         assert inside_medium_indices is None or len(inside_medium_indices) == len(boundaries)
         if inside_medium_indices is not None:
             for i, imi in enumerate(inside_medium_indices):
@@ -2270,11 +2270,11 @@ class PathtracedScene(_maps.MapBase):
         surfaces: Geometry,
         environment: _maps.MapBase,
         direct_gathering: _maps.MapBase,
-        surface_gathering: typing.Optional[typing.List[SurfaceGathering]] = None,
-        surface_scattering_sampler: typing.Optional[typing.List[SurfaceScatteringSampler]] = None,
-        medium_integrator: typing.Optional[typing.List[MediumPathIntegrator]] = None,
-        inside_medium_indices: typing.Optional[typing.List[int]] = None,
-        outside_medium_indices: typing.Optional[typing.List[int]] = None
+        surface_gathering: _typing.Optional[_typing.List[SurfaceGathering]] = None,
+        surface_scattering_sampler: _typing.Optional[_typing.List[SurfaceScatteringSampler]] = None,
+        medium_integrator: _typing.Optional[_typing.List[MediumPathIntegrator]] = None,
+        inside_medium_indices: _typing.Optional[_typing.List[int]] = None,
+        outside_medium_indices: _typing.Optional[_typing.List[int]] = None
     ):
         assert not surfaces.is_generic
         if surface_gathering is not None:
@@ -2300,7 +2300,7 @@ class PathtracedScene(_maps.MapBase):
         if surface_gathering is not None:
             for i, sg in enumerate(surface_gathering):
                 self.patch_info[i].surface_gathering = 0 if sg is None else sg.__bindable__.device_ptr
-        self.media_modules = torch.nn.ModuleList(medium_integrator)
+        self.media_modules = _torch.nn.ModuleList(medium_integrator)
         assert inside_medium_indices is None or len(inside_medium_indices) == len(surfaces)
         if inside_medium_indices is not None:
             for i, imi in enumerate(inside_medium_indices):
@@ -2316,9 +2316,9 @@ class Scene:
     def __init__(self,
                  surfaces: Geometry,
                  environment_sampler: EnvironmentSampler,
-                 materials: typing.Optional[typing.List[SurfaceMaterial]] = None,
-                 inside_media: typing.Optional[typing.List[MediumMaterial]] = None,
-                 outside_media: typing.Optional[typing.List[MediumMaterial]] = None
+                 materials: _typing.Optional[_typing.List[SurfaceMaterial]] = None,
+                 inside_media: _typing.Optional[_typing.List[MediumMaterial]] = None,
+                 outside_media: _typing.Optional[_typing.List[MediumMaterial]] = None
                  ):
         self.surfaces = surfaces
         self.boundaries = surfaces.get_boundary()
@@ -2350,11 +2350,11 @@ class Scene:
 
     @staticmethod
     def from_graph(
-            geometries: typing.Dict[str, Geometry],
+            geometries: _typing.Dict[str, Geometry],
             environment_sampler: EnvironmentSampler,
-            materials: typing.Optional[typing.Dict[str, SurfaceMaterial]] = None,
-            inside_media: typing.Optional[typing.Dict[str, MediumMaterial]] = None,
-            outside_media: typing.Optional[typing.Dict[str, MediumMaterial]] = None
+            materials: _typing.Optional[_typing.Dict[str, SurfaceMaterial]] = None,
+            inside_media: _typing.Optional[_typing.Dict[str, MediumMaterial]] = None,
+            outside_media: _typing.Optional[_typing.Dict[str, MediumMaterial]] = None
     ):
         # if len(geometries) == 1:
         #     surfaces = next(iter(geometries.values()))
@@ -2519,7 +2519,7 @@ class Scene:
 #     A = (1 - Tr) * emission;
 #     """)
 #
-#     def __init__(self, sigma: torch.Tensor, emission: torch.Tensor):
+#     def __init__(self, sigma: _torch.Tensor, emission: _torch.Tensor):
 #         super().__init__()
 #         self.sigma = parameter(sigma)
 #         self.emission = parameter(emission)
@@ -2547,7 +2547,7 @@ class Scene:
 #         W = albedo * weight;
 #         """)
 #
-#     def __init__(self, sigma: torch.Tensor, scattering_albedo: torch.Tensor, phase_sampler: PhaseSampler):
+#     def __init__(self, sigma: _torch.Tensor, scattering_albedo: _torch.Tensor, phase_sampler: PhaseSampler):
 #         super().__init__()
 #         self.sigma = parameter(sigma)
 #         self.scattering_albedo = parameter(scattering_albedo)
@@ -2593,7 +2593,7 @@ class Scene:
 #         """
 #     )
 #
-#     def __init__(self, sigma: MapBase, scattering_albedo: MapBase, phase_sampler: MapBase, majorant: torch.Tensor):
+#     def __init__(self, sigma: MapBase, scattering_albedo: MapBase, phase_sampler: MapBase, majorant: _torch.Tensor):
 #         super().__init__()
 #         self.sigma = sigma
 #         self.scattering_albedo = scattering_albedo
@@ -2612,10 +2612,10 @@ class Scene:
 #         parameters=dict(
 #             surfaces=MapBase,  # Scene to raycast
 #             environment=MapBase,  # Radiance map directional emitted from infinity
-#             surface_emission=torch.Tensor,
-#             surface_scattering_sampler=torch.Tensor,
-#             inside_media=torch.Tensor,
-#             outside_media=torch.Tensor,
+#             surface_emission=_torch.Tensor,
+#             surface_scattering_sampler=_torch.Tensor,
+#             inside_media=_torch.Tensor,
+#             outside_media=_torch.Tensor,
 #         ),
 #         dynamics=[
 #             (20, 3),  #surface emitters
@@ -2641,10 +2641,10 @@ class Scene:
 #         super().__init__(surfaces.get_number_of_patches(), MEDIA_FILTER = {'none': 0, 'transmitted': 1, 'emitted': 2, 'scattered': 3}[media_filter])
 #         self.surfaces = surfaces
 #         self.environment = environment
-#         self.sss_tensor = None if surface_scattering_sampler is None else torch.zeros(surfaces.get_number_of_patches(), dtype=torch.int64, device=device())
-#         self.se_tensor = None if surface_emission is None else torch.zeros(surfaces.get_number_of_patches(), dtype=torch.int64, device=device())
-#         self.im_tensor = None if inside_media is None else torch.zeros(surfaces.get_number_of_patches(), dtype=torch.int64, device=device())
-#         self.om_tensor = None if outside_media is None else torch.zeros(surfaces.get_number_of_patches(), dtype=torch.int64, device=device())
+#         self.sss_tensor = None if surface_scattering_sampler is None else _torch.zeros(surfaces.get_number_of_patches(), dtype=_torch.int64, device=device())
+#         self.se_tensor = None if surface_emission is None else _torch.zeros(surfaces.get_number_of_patches(), dtype=_torch.int64, device=device())
+#         self.im_tensor = None if inside_media is None else _torch.zeros(surfaces.get_number_of_patches(), dtype=_torch.int64, device=device())
+#         self.om_tensor = None if outside_media is None else _torch.zeros(surfaces.get_number_of_patches(), dtype=_torch.int64, device=device())
 #         if surface_scattering_sampler is not None:
 #             for i, sss in enumerate(surface_scattering_sampler):
 #                 self.sss_tensor[i] = 0 if sss is None else sss.__bindable__.device_ptr
@@ -2661,7 +2661,7 @@ class Scene:
 #         self.surface_emission = self.se_tensor
 #         self.inside_media = self.im_tensor
 #         self.outside_media = self.om_tensor
-#         modules = torch.nn.ModuleList()
+#         modules = _torch.nn.ModuleList()
 #         if surface_emission is not None:
 #             modules.extend(surface_emission)
 #         if surface_scattering_sampler is not None:

@@ -1,18 +1,16 @@
-import vulky as vk
+from vulky import vec3
 from . import _internal
-from . import vec3, vec2
 from . import _maps
 from . import _functions
-import torch
-import typing
-# from typing import Callable, Union, Optional, Literal, List, Tuple
-import numpy as np
+import torch as _torch
+import typing as _typing
+import numpy as _np
 
 
-def medium_box_AABB(ds: _internal.DependencySet, *, bmin: vec3 = vec3(-1.0, -1.0, -1.0), bmax: vk.vec3 = vk.vec3(1.0, 1.0, 1.0)):
+def medium_box_AABB(ds: _internal.DependencySet, *, bmin: vec3 = vec3(-1.0, -1.0, -1.0), bmax: vec3 = vec3(1.0, 1.0, 1.0)):
     ds.add_parameters(box=(bmin, bmax))
 
-def medium_box_normalized(ds: _internal.DependencySet, *, t: typing.Union[torch.Tensor, typing.List[int]]):
+def medium_box_normalized(ds: _internal.DependencySet, *, t: _typing.Union[_torch.Tensor, _typing.List[int]]):
     ds.add_parameters(box=_maps.normalized_box(t))
 
 def medium_box(ds: _internal.DependencySet):
@@ -22,7 +20,7 @@ def medium_box(ds: _internal.DependencySet):
     if ds.ensures('box', tuple):
         return
     try:
-        ds.assert_ensures('sigma_tensor', torch.Tensor)
+        ds.assert_ensures('sigma_tensor', _torch.Tensor)
         medium_box_normalized(ds, t = ds.sigma_tensor)
     except:
         try:
@@ -49,7 +47,7 @@ def medium_boundary(ds: _internal.DependencySet):
 def build_map_from_tensor(ds: _internal.DependencySet, *, field_name: str):
     ds.requires(medium_box)
     bmin, bmax = ds.box
-    ds.assert_ensures(field_name + "_tensor", torch.Tensor)
+    ds.assert_ensures(field_name + "_tensor", _torch.Tensor)
     tensor = getattr(ds, field_name + "_tensor")
     if len(tensor.shape) == 1:
         return _maps.const[tensor]
@@ -90,14 +88,14 @@ def medium_phase_g(ds: _internal.DependencySet):
     medium_phase_g_tensor(ds)
 
 def medium_majorant_tensor(ds):
-    ds.assert_ensures('majorant_tensor', torch.Tensor)
+    ds.assert_ensures('majorant_tensor', _torch.Tensor)
     ds.add_parameters(majorant=_maps.const[ds.majorant_tensor])
 
 def medium_majorant_grid(ds: _internal.DependencySet):
     ds.requires(medium_sigma)
     ds.assert_ensures('sigma', _maps.Grid3D)
     g: _maps.Grid3D = ds.sigma
-    ds.add_parameters(majorant_tensor=lambda: torch.tensor([g.get_maximum(), 1000000.0], device=_internal.device()))
+    ds.add_parameters(majorant_tensor=lambda: _torch.tensor([g.get_maximum(), 1000000.0], device=_internal.device()))
     ds.add_parameters(majorant=_maps.const[ds.majorant_tensor])
 
 def medium_majorant(ds: _internal.DependencySet):
@@ -161,8 +159,8 @@ def medium_transmittance(ds: _internal.DependencySet):
         print("[WARNING] fields for ratio-tracking transmittance not found, trying DDA instead")
         medium_transmittance_DDA(ds)
 
-def medium_environment_tensor(ds: _internal.DependencySet, *, projection: typing.Literal['sph', 'cyl', 'xr', 'cube'] = 'xr'):
-    ds.assert_ensures("environment_tensor", torch.Tensor)
+def medium_environment_tensor(ds: _internal.DependencySet, *, projection: _typing.Literal['sph', 'cyl', 'xr', 'cube'] = 'xr'):
+    ds.assert_ensures("environment_tensor", _torch.Tensor)
     t = ds.environment_tensor
     if len(t.shape) == 1:  # constant
         ds.add_parameters(environment=_maps.const[ds.environment_tensor])
@@ -177,16 +175,16 @@ def medium_environment(ds: _internal.DependencySet):
         return
     medium_environment_tensor(ds)
 
-def medium_environment_sampler_quadtree(ds: _internal.DependencySet, *, projection: typing.Literal['sph', 'cyl', 'xr', 'cube'] = 'xr', levels: int = 10):
+def medium_environment_sampler_quadtree(ds: _internal.DependencySet, *, projection: _typing.Literal['sph', 'cyl', 'xr', 'cube'] = 'xr', levels: int = 10):
     ds.requires(medium_environment_tensor, projection=projection)
     if projection == 'xr':
         skybox_img = ds.environment_tensor
         def build_quadtree():
-            with torch.no_grad():
+            with _torch.no_grad():
                 resolution = 1 << levels
                 densities = _functions.resample_img(skybox_img.sum(-1, keepdim=True), (resolution, resolution))
                 for py in range(resolution):
-                    w = np.cos(py * np.pi / resolution) - np.cos((py + 1) * np.pi / resolution)
+                    w = _np.cos(py * _np.pi / resolution) - _np.cos((py + 1) * _np.pi / resolution)
                     densities[py, :, :] *= w
                 densities /= max(densities.sum(), 0.00000001)
                 return _functions.create_density_quadtree(densities)
@@ -212,7 +210,7 @@ def medium_environment_sampler(ds: _internal.DependencySet):
         print(f"[WARNING] Quadtree sampler for environment could not be created. {e}. Using uniform sampling instead.")
 
 def medium_phase_iso(ds: _internal.DependencySet):
-    ds.add_parameters(phase=_maps.const[1.0 / (4 * np.pi)])
+    ds.add_parameters(phase=_maps.const[1.0 / (4 * _np.pi)])
 
 def medium_phase_HG(ds: _internal.DependencySet):
     ds.requires(medium_phase_g)
@@ -256,7 +254,7 @@ def medium_collision_sampler(ds: _internal.DependencySet):
 def medium_radiance_transmitted(ds: _internal.DependencySet):
     ds.requires(medium_transmittance)
     ds.requires(medium_environment)
-    ds.add_parameters(radiance=ds.transmittance * ds.environment.after(_maps.ray_direction()))
+    ds.add_parameters(radiance=ds.transmittance * ds.environment.after(_maps.ray_direction))
 
 def medium_exitance_radiance_emission(ds: _internal.DependencySet):
     ds.requires(medium_emission)
@@ -514,15 +512,15 @@ def medium_radiance(ds: _internal.DependencySet):
 
 
 
-def camera_sensors(ds: _internal.DependencySet, *, width: int, height: int, jittered: bool = False, fov: float = np.pi/4):
-    ds.assert_ensures('camera_poses', torch.Tensor)
+def camera_sensors(ds: _internal.DependencySet, *, width: int, height: int, jittered: bool = False, fov: float = _np.pi/4):
+    ds.assert_ensures('camera_poses', _torch.Tensor)
     camera_poses = ds.camera_poses
     ds.add_parameters(camera=_maps.PerspectiveCameraSensor(width, height, camera_poses, fov=fov, jittered=jittered))
 
 #
 #
 # ds = DependencySet()
-# ds.add_parameters(sigma_grid=torch.tensor([]))
+# ds.add_parameters(sigma_grid=_torch.tensor([]))
 # ds.include(medium_fields, fields=['sigma'])
 # ds.include(transmittance, mode='dt')
 # ds.include(environment_map)
@@ -549,13 +547,13 @@ def camera_sensors(ds: _internal.DependencySet, *, width: int, height: int, jitt
 #
 #
 # class XREnvironment (Environment):
-#     def __init__(self, skybox_img: torch.Tensor, quadtree_levels: int = 10):
+#     def __init__(self, skybox_img: _torch.Tensor, quadtree_levels: int = 10):
 #         def build_quadtree():
-#             with torch.no_grad():
+#             with _torch.no_grad():
 #                 resolution = 1 << quadtree_levels
 #                 densities = resample_img(skybox_img.sum(-1, keepdim=True), (resolution, resolution))
 #                 for py in range(resolution):
-#                     w = np.cos(py * np.pi / resolution) - np.cos((py + 1) * np.pi / resolution)
+#                     w = _np.cos(py * _np.pi / resolution) - _np.cos((py + 1) * _np.pi / resolution)
 #                     densities[py, :, :] *= w
 #                 densities /= max(densities.sum(), 0.00000001)
 #                 return create_density_quadtree(densities)
@@ -614,9 +612,9 @@ def camera_sensors(ds: _internal.DependencySet, *, width: int, height: int, jitt
 #
 # class GridMedium(Medium):
 #     def __init__(self,
-#                  sigma: Union[torch.Tensor, Callable[[], torch.Tensor]],
-#                  scattering_albedo: Union[None, torch.Tensor, Callable[[], torch.Tensor]],
-#                  emission: Union[None, torch.Tensor, Callable[[], torch.Tensor]]
+#                  sigma: Union[_torch.Tensor, Callable[[], _torch.Tensor]],
+#                  scattering_albedo: Union[None, _torch.Tensor, Callable[[], _torch.Tensor]],
+#                  emission: Union[None, _torch.Tensor, Callable[[], _torch.Tensor]]
 #                  ):
 #         sigma = self.register_parameter(sigma)
 #         scattering_albedo = self.register_parameter(scattering_albedo)

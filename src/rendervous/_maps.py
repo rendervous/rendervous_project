@@ -1,19 +1,17 @@
-import vulky as vk
+import vulky as _vk
 from . import _internal
-# from ._internal import device, get_seeds, __INCLUDE_PATH__
 from . import _functions
-import typing
-# from typing import List, Tuple, Optional, Literal, Union, Callable
-import enum
-import torch
-import os
+import typing as _typing
+import enum as _enum
+import torch as _torch
+import os as _os
 from vulky import vec2, vec3
-import numpy as np
-import math
-import threading
+import numpy as _np
+import math as _math
+import threading as _threading
 
 
-class BACKWARD_IMPLEMENTATIONS(enum.IntEnum):
+class BACKWARD_IMPLEMENTATIONS(_enum.IntEnum):
     NONE = 0
     """
     The map source code doesn't contains any backward function
@@ -54,7 +52,7 @@ class DispatcherEngine:
     __BW_RAYCASTER_CACHED_MAN__ = {}  # command buffers for dispatching bw raycast evaluations
     __BW_CAPTURE_CACHED_MAN__ = {}  # command buffers for dispatching bw capture evaluations
 
-    __LOCKER__ = threading.Lock()
+    __LOCKER__ = _threading.Lock()
 
     @classmethod
     def start(cls):
@@ -72,21 +70,21 @@ class DispatcherEngine:
         return code
 
     @classmethod
-    def create_code_for_struct_declaration(cls, type_definition) -> typing.Tuple[
+    def create_code_for_struct_declaration(cls, type_definition) -> _typing.Tuple[
         str, dict, list]:  # Code, new structures, sizes
         if type_definition == MapBase:
             raise Exception('Basic structs can not contain map references')
-        if type_definition == torch.Tensor:
+        if type_definition == _torch.Tensor:
             return 'GPUPtr', {}, []
-        if vk.Layout.is_scalar_type(type_definition):
+        if _vk.Layout.is_scalar_type(type_definition):
             if type_definition == int:
                 return 'int', {}, []
             if type_definition == 'float':
                 return 'float', {}, []
             return {
-                       torch.int32: 'int',
-                       torch.float32: 'float',
-                       torch.int64: 'GPUPtr'
+                       _torch.int32: 'int',
+                       _torch.float32: 'float',
+                       _torch.int64: 'GPUPtr'
                    }[type_definition], {}, []
         if isinstance(type_definition, list):
             size = type_definition[0]
@@ -108,26 +106,26 @@ class DispatcherEngine:
         return type_definition.__name__, {}, []  # vec and mats
 
     @classmethod
-    def create_code_for_map_declaration(cls, type_definition, field_value, allow_block: bool = False) -> typing.Tuple[
+    def create_code_for_map_declaration(cls, type_definition, field_value, allow_block: bool = False) -> _typing.Tuple[
         str, dict, list]:  # Code, new structures, sizes
         if type_definition == MapBase:
             return cls.register_instance(field_value.obj)[1], {}, []
-        if type_definition == torch.Tensor:
+        if type_definition == _torch.Tensor:
             return 'GPUPtr', {}, []
-        if vk.Layout.is_scalar_type(type_definition):
+        if _vk.Layout.is_scalar_type(type_definition):
             if type_definition == int:
                 return 'int', {}, []
             if type_definition == float:
                 return 'float', {}, []
             return {
-                       torch.int32: 'int',
-                       torch.float32: 'float',
-                       torch.int64: 'GPUPtr'
+                       _torch.int32: 'int',
+                       _torch.float32: 'float',
+                       _torch.int64: 'GPUPtr'
                    }[type_definition], {}, []
         if isinstance(type_definition, list):
             size = type_definition[0]
             t = type_definition[1]
-            field_value: vk.ObjectBufferAccessor
+            field_value: _vk.ObjectBufferAccessor
             element_decl, inner_structures, element_sizes = cls.create_code_for_map_declaration(t, field_value[0] if len(field_value) > 0 else None)
             return element_decl, inner_structures, [size] + element_sizes
         if isinstance(type_definition, dict):
@@ -281,7 +279,7 @@ void backward (map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DI
         return code
 
     @classmethod
-    def register_instance(cls, map: 'MapBase') -> typing.Tuple[int, str]:  # new or existing instance id for the object
+    def register_instance(cls, map: 'MapBase') -> _typing.Tuple[int, str]:  # new or existing instance id for the object
         signature = map.signature
         if signature not in cls.__MAP_INSTANCES__:
             instance_id = len(cls.__MAP_INSTANCES__) + 1
@@ -295,51 +293,51 @@ void backward (map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DI
         if cls.__ENGINE_OBJECTS__ is not None:
             return
 
-        map_fw_eval = vk.object_buffer(layout=vk.Layout.from_structure(vk.LayoutAlignment.STD430,
-                                                                                main_map=torch.int64,
-                                                                                input=torch.int64,
-                                                                                output=torch.int64,
-                                                                                seeds=vk.ivec4,
+        map_fw_eval = _vk.object_buffer(layout=_vk.Layout.from_structure(_vk.LayoutAlignment.STD430,
+                                                                                main_map=_torch.int64,
+                                                                                input=_torch.int64,
+                                                                                output=_torch.int64,
+                                                                                seeds=_vk.ivec4,
                                                                                 start_index=int,
                                                                                 total_threads=int,
-                                                                                debug_ptr=torch.int64
+                                                                                debug_ptr=_torch.int64
                                                                                 ))
 
-        map_bw_eval = vk.object_buffer(layout=vk.Layout.from_structure(vk.LayoutAlignment.STD430,
-                                                                                main_map=torch.int64,
-                                                                                input=torch.int64,
-                                                                                output_grad=torch.int64,
-                                                                                input_grad=torch.int64,
-                                                                                seeds=vk.ivec4,
+        map_bw_eval = _vk.object_buffer(layout=_vk.Layout.from_structure(_vk.LayoutAlignment.STD430,
+                                                                                main_map=_torch.int64,
+                                                                                input=_torch.int64,
+                                                                                output_grad=_torch.int64,
+                                                                                input_grad=_torch.int64,
+                                                                                seeds=_vk.ivec4,
                                                                                 start_index=int,
                                                                                 total_threads=int,
-                                                                                debug_ptr=torch.int64
+                                                                                debug_ptr=_torch.int64
                                                                                 ))
 
-        capture_fw_eval = vk.object_buffer(layout=vk.Layout.from_structure(vk.LayoutAlignment.STD430,
-                                                                                    capture_sensor=torch.int64,
-                                                                                    main_map=torch.int64,
-                                                                                    sensors=torch.int64,
-                                                                                    tensor=torch.int64,
-                                                                                    seeds=vk.ivec4,
+        capture_fw_eval = _vk.object_buffer(layout=_vk.Layout.from_structure(_vk.LayoutAlignment.STD430,
+                                                                                    capture_sensor=_torch.int64,
+                                                                                    main_map=_torch.int64,
+                                                                                    sensors=_torch.int64,
+                                                                                    tensor=_torch.int64,
+                                                                                    seeds=_vk.ivec4,
                                                                                     sensor_shape=[4, int],
                                                                                     start_index=int,
                                                                                     total_threads=int,
                                                                                     samples=int,
-                                                                                    debug_ptr=torch.int64
+                                                                                    debug_ptr=_torch.int64
                                                                                     ))
 
-        capture_bw_eval = vk.object_buffer(layout=vk.Layout.from_structure(vk.LayoutAlignment.STD430,
-                                                                                    capture_sensor=torch.int64,
-                                                                                    main_map=torch.int64,
-                                                                                    sensors=torch.int64,
-                                                                                    tensor_grad=torch.int64,
-                                                                                    seeds=vk.ivec4,
+        capture_bw_eval = _vk.object_buffer(layout=_vk.Layout.from_structure(_vk.LayoutAlignment.STD430,
+                                                                                    capture_sensor=_torch.int64,
+                                                                                    main_map=_torch.int64,
+                                                                                    sensors=_torch.int64,
+                                                                                    tensor_grad=_torch.int64,
+                                                                                    seeds=_vk.ivec4,
                                                                                     sensor_shape=[4, int],
                                                                                     start_index=int,
                                                                                     total_threads=int,
                                                                                     samples=int,
-                                                                                    debug_ptr=torch.int64
+                                                                                    debug_ptr=_torch.int64
                                                                                     ))
         cls.__ENGINE_OBJECTS__ = {
             'map_fw_eval': map_fw_eval,
@@ -409,8 +407,8 @@ void main()
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
-        pipeline = vk.pipeline_compute()
-        pipeline.layout(set=0, binding=0, settings=vk.DescriptorType.UNIFORM_BUFFER)
+        pipeline = _vk.pipeline_compute()
+        pipeline.layout(set=0, binding=0, settings=_vk.DescriptorType.UNIFORM_BUFFER)
         pipeline.load_shader_from_source(full_code, include_dirs=[_internal.__INCLUDE_PATH__] + cls.__INCLUDE_DIRS__)
         pipeline.close()
 
@@ -491,8 +489,8 @@ void main()
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
-        pipeline = vk.pipeline_compute()
-        pipeline.layout(set=0, binding=0, settings=vk.DescriptorType.UNIFORM_BUFFER)
+        pipeline = _vk.pipeline_compute()
+        pipeline.layout(set=0, binding=0, settings=_vk.DescriptorType.UNIFORM_BUFFER)
         pipeline.load_shader_from_source(full_code, include_dirs=[_internal.__INCLUDE_PATH__] + cls.__INCLUDE_DIRS__)
         pipeline.close()
 
@@ -618,8 +616,8 @@ void main()
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
-        pipeline = vk.pipeline_compute()
-        pipeline.layout(set=0, binding=0, settings=vk.DescriptorType.UNIFORM_BUFFER)
+        pipeline = _vk.pipeline_compute()
+        pipeline.layout(set=0, binding=0, settings=_vk.DescriptorType.UNIFORM_BUFFER)
         pipeline.load_shader_from_source(full_code, include_dirs=[_internal.__INCLUDE_PATH__]+cls.__INCLUDE_DIRS__)
         pipeline.close()
 
@@ -731,8 +729,8 @@ void main()
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
-        pipeline = vk.pipeline_compute()
-        pipeline.layout(set=0, binding=0, settings=vk.DescriptorType.UNIFORM_BUFFER)
+        pipeline = _vk.pipeline_compute()
+        pipeline.layout(set=0, binding=0, settings=_vk.DescriptorType.UNIFORM_BUFFER)
         pipeline.load_shader_from_source(full_code, include_dirs=[_internal.__INCLUDE_PATH__] + cls.__INCLUDE_DIRS__)
         pipeline.close()
 
@@ -747,14 +745,14 @@ void main()
 
     @classmethod
     def eval_capture_forward(cls, capture_object: 'SensorsBase', field: 'MapBase',
-                             sensors: typing.Optional[torch.Tensor] = None, batch_size: typing.Optional[int] = None,
-                             fw_samples: int = 1, debug_out: typing.Optional[torch.Tensor] = None) -> torch.Tensor:
+                             sensors: _typing.Optional[_torch.Tensor] = None, batch_size: _typing.Optional[int] = None,
+                             fw_samples: int = 1, debug_out: _typing.Optional[_torch.Tensor] = None) -> _torch.Tensor:
         with cls.__LOCKER__:
 
             if sensors is not None:
                 total_threads = sensors.numel() // sensors.shape[-1]
             else:
-                total_threads = math.prod(capture_object.index_shape[
+                total_threads = _math.prod(capture_object.index_shape[
                                           :capture_object.input_dim]).item()  # capture_object.screen_width * capture_object.screen_height
 
             assert debug_out is None or debug_out.numel() == total_threads, f"Debug tensor provided has not the required size {total_threads}"
@@ -767,7 +765,7 @@ void main()
             # create man if not cached
             if cache_key not in cls.__FW_CAPTURE_CACHED_MAN__:
                 pipeline, global_bindings = cls.build_capture_fw_eval_objects(capture_object, field)
-                man = vk.compute_manager()
+                man = _vk.compute_manager()
                 man.set_pipeline(pipeline)
                 man.bind(global_bindings[0])
                 man.dispatch_threads_1D(batch_size, group_size_x=32)
@@ -779,19 +777,19 @@ void main()
             # assert input.shape[-1] == map_object.input_dim, f'Wrong last dimension for the input tensor, must be {map_object.input_dim}'
 
             if sensors is not None:
-                output = vk.tensor(*sensors.shape[:-1], field.output_dim, dtype=torch.float)
+                output = _vk.tensor(*sensors.shape[:-1], field.output_dim, dtype=_torch.float)
             else:
-                output = vk.tensor(*capture_object.index_shape[:capture_object.input_dim], field.output_dim, dtype=torch.float)
+                output = _vk.tensor(*capture_object.index_shape[:capture_object.input_dim], field.output_dim, dtype=_torch.float)
 
             capture_object._pre_eval(False)
             field._pre_eval(False)
 
-            output_ptr = vk.wrap_gpu(output, 'out')
+            output_ptr = _vk.wrap_gpu(output, 'out')
 
             with cls.__ENGINE_OBJECTS__['capture_fw_eval'] as b:
-                b.capture_sensor = vk.wrap_gpu(capture_object)
-                b.main_map = vk.wrap_gpu(field)
-                b.sensors = vk.wrap_gpu(sensors)
+                b.capture_sensor = _vk.wrap_gpu(capture_object)
+                b.main_map = _vk.wrap_gpu(field)
+                b.sensors = _vk.wrap_gpu(sensors)
                 b.tensor = output_ptr
                 b.seeds[:] = _internal.get_seeds()
                 shape = b.sensor_shape
@@ -802,12 +800,12 @@ void main()
                 b.start_index = 0
                 b.total_threads = total_threads
                 b.samples = fw_samples
-                b.debug_ptr = 0 if debug_out is None else vk.wrap_gpu(debug_out, 'out')
+                b.debug_ptr = 0 if debug_out is None else _vk.wrap_gpu(debug_out, 'out')
 
             for batch in range((total_threads + batch_size - 1) // batch_size):
                 with cls.__ENGINE_OBJECTS__['capture_fw_eval'] as b:
                     b.start_index = batch * batch_size
-                vk.submit(man)
+                _vk.submit(man)
 
             output_ptr.mark_as_dirty()
             output_ptr.invalidate()
@@ -821,14 +819,14 @@ void main()
             return output.clone()
 
     @classmethod
-    def eval_capture_backward(cls, capture_object: 'SensorsBase', field: 'MapBase', output_grad: torch.Tensor,
-                              sensors: typing.Optional[torch.Tensor] = None, batch_size: typing.Optional[int] = None,
-                              bw_samples: int = 1, debug_out: torch.Tensor = None):
+    def eval_capture_backward(cls, capture_object: 'SensorsBase', field: 'MapBase', output_grad: _torch.Tensor,
+                              sensors: _typing.Optional[_torch.Tensor] = None, batch_size: _typing.Optional[int] = None,
+                              bw_samples: int = 1, debug_out: _torch.Tensor = None):
         with cls.__LOCKER__:
             if sensors is not None:
                 total_threads = sensors.numel() // sensors.shape[-1]
             else:
-                total_threads = math.prod(capture_object.index_shape[
+                total_threads = _math.prod(capture_object.index_shape[
                                           :capture_object.input_dim]).item()  # capture_object.screen_width * capture_object.screen_height
 
             assert debug_out is None or debug_out.numel() == total_threads, f"Debug tensor provided has not the required size {total_threads}"
@@ -841,7 +839,7 @@ void main()
             # create man if not cached
             if cache_key not in cls.__BW_CAPTURE_CACHED_MAN__:
                 pipeline, global_bindings = cls.build_capture_bw_eval_objects(capture_object, field)
-                man = vk.compute_manager()
+                man = _vk.compute_manager()
                 man.set_pipeline(pipeline)
                 man.bind(global_bindings[0])
                 man.dispatch_threads_1D(batch_size, group_size_x=32)
@@ -854,13 +852,13 @@ void main()
 
             capture_object._pre_eval(True)
             field._pre_eval(True)
-            torch.cuda.synchronize()
+            _torch.cuda.synchronize()
 
             with cls.__ENGINE_OBJECTS__['capture_bw_eval'] as b:
-                b.capture_sensor = vk.wrap_gpu(capture_object)
-                b.main_map = vk.wrap_gpu(field)
-                b.sensors = vk.wrap_gpu(sensors)
-                b.tensor_grad = vk.wrap_gpu(output_grad)
+                b.capture_sensor = _vk.wrap_gpu(capture_object)
+                b.main_map = _vk.wrap_gpu(field)
+                b.sensors = _vk.wrap_gpu(sensors)
+                b.tensor_grad = _vk.wrap_gpu(output_grad)
                 b.seeds[:] = _internal.get_seeds()
                 shape = b.sensor_shape
                 shape[0] = capture_object.index_shape[0].item()
@@ -870,27 +868,27 @@ void main()
                 b.start_index = 0
                 b.total_threads = total_threads
                 b.samples = bw_samples
-                b.debug_ptr = 0 if debug_out is None else vk.wrap_gpu(debug_out, 'out')
+                b.debug_ptr = 0 if debug_out is None else _vk.wrap_gpu(debug_out, 'out')
 
             for batch in range((total_threads + batch_size - 1) // batch_size):
                 with cls.__ENGINE_OBJECTS__['capture_bw_eval'] as b:
                     b.start_index = batch * batch_size
-                vk.submit(man)
+                _vk.submit(man)
 
             capture_object._pos_eval(True)
             field._pos_eval(True)
-            torch.cuda.synchronize()
+            _torch.cuda.synchronize()
 
     @classmethod
-    def eval_map_forward(cls, map_object: 'MapBase', input: torch.Tensor) -> torch.Tensor:
-        total_threads = math.prod(input.shape[:-1])
+    def eval_map_forward(cls, map_object: 'MapBase', input: _torch.Tensor) -> _torch.Tensor:
+        total_threads = _math.prod(input.shape[:-1])
 
         cache_key = (total_threads, map_object.signature)
 
         # create man if not cached
         if cache_key not in cls.__FW_DISPATCHER_CACHED_MAN__:
             pipeline, global_bindings = cls.build_map_fw_eval_objects(map_object)
-            man = vk.compute_manager()
+            man = _vk.compute_manager()
             man.set_pipeline(pipeline)
             man.bind(global_bindings[0])
             man.dispatch_threads_1D(total_threads, group_size_x=32)
@@ -901,21 +899,21 @@ void main()
 
         assert input.shape[
                    -1] == map_object.input_dim, f'Wrong last dimension for the input tensor, must be {map_object.input_dim}'
-        output = vk.tensor(*input.shape[:-1], map_object.output_dim, dtype=torch.float)
+        output = _vk.tensor(*input.shape[:-1], map_object.output_dim, dtype=_torch.float)
 
         map_object._pre_eval(False)
 
-        output_ptr = vk.wrap_gpu(output, 'out')
+        output_ptr = _vk.wrap_gpu(output, 'out')
 
         with cls.__ENGINE_OBJECTS__['map_fw_eval'] as b:
-            b.main_map = vk.wrap_gpu(map_object)
-            b.input = vk.wrap_gpu(input)
+            b.main_map = _vk.wrap_gpu(map_object)
+            b.input = _vk.wrap_gpu(input)
             b.output = output_ptr
             b.seeds[:] = _internal.get_seeds()
             b.start_index = 0
             b.total_threads = total_threads
 
-        vk.submit(man)
+        _vk.submit(man)
 
         map_object._pos_eval(False)
 
@@ -925,16 +923,16 @@ void main()
         return output.clone()
 
     @classmethod
-    def eval_map_backward(cls, map_object: 'MapBase', input: torch.Tensor, output_grad: torch.Tensor):
+    def eval_map_backward(cls, map_object: 'MapBase', input: _torch.Tensor, output_grad: _torch.Tensor):
         with cls.__LOCKER__:
-            total_threads = math.prod(input.shape[:-1])
+            total_threads = _math.prod(input.shape[:-1])
 
             cache_key = (total_threads, map_object.signature)
 
             # create man if not cached
             if cache_key not in cls.__BW_DISPATCHER_CACHED_MAN__:
                 pipeline, global_bindings = cls.build_map_bw_eval_objects(map_object)
-                man = vk.compute_manager()
+                man = _vk.compute_manager()
                 man.set_pipeline(pipeline)
                 man.bind(global_bindings[0])
                 man.dispatch_threads_1D(total_threads, group_size_x=32)
@@ -949,24 +947,24 @@ void main()
                        -1] == map_object.output_dim, f'Wrong last dimension for the output_grad tensor, must be {map_object.output_dim}'
 
             if input.requires_grad:  #
-                input_grad = torch.zeros_like(input)
+                input_grad = _torch.zeros_like(input)
             else:
                 input_grad = None
 
             map_object._pre_eval(True)
 
-            input_grad_ptr = vk.wrap_gpu(input_grad, 'inout')
+            input_grad_ptr = _vk.wrap_gpu(input_grad, 'inout')
 
             with cls.__ENGINE_OBJECTS__['map_bw_eval'] as b:
-                b.main_map = vk.wrap_gpu(map_object)
-                b.input = vk.wrap_gpu(input)
-                b.output_grad = vk.wrap_gpu(output_grad)
+                b.main_map = _vk.wrap_gpu(map_object)
+                b.input = _vk.wrap_gpu(input)
+                b.output_grad = _vk.wrap_gpu(output_grad)
                 b.input_grad = input_grad_ptr
                 b.seeds[:] = _internal.get_seeds()
                 b.start_index = 0
                 b.total_threads = total_threads
 
-            vk.submit(man)
+            _vk.submit(man)
 
             map_object._pos_eval(True)
 
@@ -977,8 +975,8 @@ void main()
 
 
 def start_engine():
-    if torch.cuda.is_available():
-        torch.cuda.init()
+    if _torch.cuda.is_available():
+        _torch.cuda.init()
     DispatcherEngine.start()
 
 
@@ -994,19 +992,19 @@ def map_struct(
 
 ParameterDescriptor = map_struct(
     'Parameter',
-    data=torch.Tensor,
+    data=_torch.Tensor,
     stride=[4, int],
     shape=[4, int],
-    grad_data=torch.Tensor
+    grad_data=_torch.Tensor
 )
 
 
 ParameterDescriptorLayoutType = dict(
     __name__='Parameter',
-    data=torch.int64,
+    data=_torch.int64,
     stride=[4, int],
     shape=[4, int],
-    grad_data=torch.int64
+    grad_data=_torch.int64
 )
 
 
@@ -1024,46 +1022,46 @@ MeshInfo = map_struct(
 
 RaycastableInfo = map_struct(
     'RaycastableInfo',
-    callable_map=torch.int64,
-    explicit_info=torch.int64,
+    callable_map=_torch.int64,
+    explicit_info=_torch.int64,
 )
 
 
-def parameter(p: typing.Union[None, torch.Tensor, torch.nn.Parameter]):
+def parameter(p: _typing.Union[None, _torch.Tensor, _torch.nn.Parameter]):
     if p is None:
         return None
-    if isinstance(p, torch.nn.Parameter):
+    if isinstance(p, _torch.nn.Parameter):
         return p
     assert not p.requires_grad, 'Tensors used as parameters can no require grads. Use Parameter instead.'
-    return torch.nn.Parameter(p, requires_grad=False)
+    return _torch.nn.Parameter(p, requires_grad=False)
 
 
-def bind_parameter(field: vk.ObjectBufferAccessor, t: torch.Tensor):
-    field.data = vk.wrap_gpu(t, 'in')
+def bind_parameter(field: _vk.ObjectBufferAccessor, t: _torch.Tensor):
+    field.data = _vk.wrap_gpu(t, 'in')
     if t is not None:
         for i, s in enumerate(t.shape):
             field.stride[i] = t.stride(i)
             field.shape[i] = s
 
 
-def bind_parameter_grad(field: vk.ObjectBufferAccessor):
+def bind_parameter_grad(field: _vk.ObjectBufferAccessor):
     if field.data.obj is None:
-        field.grad_data = vk.wrap_gpu(None, 'inout')
+        field.grad_data = _vk.wrap_gpu(None, 'inout')
         return
-    t: torch.Tensor = field.data.obj
+    t: _torch.Tensor = field.data.obj
     if t.requires_grad:
         if t.grad is None:
-            t.grad = vk.tensor(*t.shape, dtype=t.dtype).zero_()
-            # t.grad = torch.zeros_like(t)
-        field.grad_data = vk.wrap_gpu(t.grad, 'inout')
+            t.grad = _vk.tensor(*t.shape, dtype=t.dtype).zero_()
+            # t.grad = _torch.zeros_like(t)
+        field.grad_data = _vk.wrap_gpu(t.grad, 'inout')
 
 
 class TensorCheck(object):
-    def __init__(self, initial_value: typing.Optional[torch.Tensor] = None):
+    def __init__(self, initial_value: _typing.Optional[_torch.Tensor] = None):
         self.cached_tensor = initial_value
         self.cached_tensor_version = -1 if initial_value is None else initial_value._version
 
-    def changed(self, t: torch.Tensor):
+    def changed(self, t: _torch.Tensor):
         if not (t is self.cached_tensor):
             self.cached_tensor = t
             return True
@@ -1085,22 +1083,22 @@ class MapMeta(type):
             extension_generics = extension_info.get('generics', {})
             extension_dynamic_requires = extension_info.get('dynamics', [])  # List with list of map signatures that can be dispatched dynamically by this map
             parameters = extension_info.get('parameters', {})
-            assert (extension_path is None or isinstance(extension_path, str) and os.path.isfile(
+            assert (extension_path is None or isinstance(extension_path, str) and _os.path.isfile(
                 extension_path)), 'path must be a valid file path str'
             include_dirs = extension_info.get('include_dirs', [])
             assert (extension_path is None) != (extension_code is None), 'Either path or code must be provided'
             if extension_path is not None:
-                include_dirs.append(os.path.dirname(extension_path))
-                extension_code = f"#include \"{os.path.basename(extension_path)}\"\n"
+                include_dirs.append(_os.path.dirname(extension_path))
+                extension_code = f"#include \"{_os.path.basename(extension_path)}\"\n"
                 # with open(extension_path) as f:
                 #     extension_code = f.readlines()
             bw_implementations = extension_info.get('bw_implementations', BACKWARD_IMPLEMENTATIONS.NONE)
 
             def from_type_2_layout_description(p, dynamic_array_size = 0):
                 if p == MapBase:
-                    return torch.int64
-                if p == torch.Tensor:
-                    return torch.int64
+                    return _torch.int64
+                if p == _torch.Tensor:
+                    return _torch.int64
                 if isinstance(p, list):
                     return [p[0] if p[0] > 0 else dynamic_array_size, from_type_2_layout_description(p[1])]
                 if isinstance(p, dict):
@@ -1108,7 +1106,7 @@ class MapMeta(type):
                 return p
 
             parameters = {'rdv_map_id': int, 'rdv_map_pad0': int, **parameters}
-            parameters_layout = lambda s: vk.Layout.from_description(vk.LayoutAlignment.SCALAR, description=from_type_2_layout_description(parameters, s))
+            parameters_layout = lambda s: _vk.Layout.from_description(_vk.LayoutAlignment.SCALAR, description=from_type_2_layout_description(parameters, s))
             ext_class.default_generics = extension_generics
             ext_class.dynamic_requires = extension_dynamic_requires
             ext_class.map_object_layout = parameters_layout
@@ -1135,8 +1133,8 @@ class MapMeta(type):
         return map_instance
 
 
-class GPUDirectModule(torch.nn.Module):
-    def __init__(self, accessor: typing.Optional[vk.ObjectBufferAccessor]):
+class GPUDirectModule(_torch.nn.Module):
+    def __init__(self, accessor: _typing.Optional[_vk.ObjectBufferAccessor]):
         assert accessor is None or accessor._rdv_layout.is_structure
         super().__init__()
         object.__setattr__(self, '_rdv_accessor', accessor)
@@ -1150,7 +1148,7 @@ class GPUDirectModule(torch.nn.Module):
                     super().__setattr__(k, StructModule(getattr(accessor, k)))
 
     def __setattr__(self, key, value):
-        a: vk.ObjectBufferAccessor = self._rdv_accessor
+        a: _vk.ObjectBufferAccessor = self._rdv_accessor
         if a is not None:
             # Update gpu info if field is part of the accessed object
             if key in a._rdv_fields:
@@ -1159,8 +1157,8 @@ class GPUDirectModule(torch.nn.Module):
                     if isinstance(value, int):
                         setattr(a, key, value)
                     else:
-                        setattr(a, key, vk.wrap_gpu(value))
-                elif field_layout.is_structure and field_layout.declaration['__name__'] == ParameterDescriptor['__name__']: # key in self._parameters or isinstance(value, torch.nn.Parameter):
+                        setattr(a, key, _vk.wrap_gpu(value))
+                elif field_layout.is_structure and field_layout.declaration['__name__'] == ParameterDescriptor['__name__']: # key in self._parameters or isinstance(value, _torch.nn.Parameter):
                     bind_parameter(getattr(a, key), value)
                 else:
                     setattr(a, key, value)
@@ -1172,10 +1170,10 @@ class GPUDirectModule(torch.nn.Module):
                 if v.requires_grad:
                     # print(f'Bound parameter with grad for {k} in {type(self)}')
                     bind_parameter_grad(getattr(self._rdv_accessor, k))
-        def deep_pre_eval(m: typing.Union[torch.nn.Module]):
+        def deep_pre_eval(m: _typing.Union[_torch.nn.Module]):
             if isinstance(m, GPUDirectModule):
                 m._pre_eval(include_grads)
-            if isinstance(m, torch.nn.ModuleList):
+            if isinstance(m, _torch.nn.ModuleList):
                 for c in m:
                     deep_pre_eval(c)
         for k, m in self._modules.items():
@@ -1186,10 +1184,10 @@ class GPUDirectModule(torch.nn.Module):
                 r.flush()
 
     def _pos_eval(self, include_grads: bool = False):
-        def deep_pos_eval(m: typing.Union[torch.nn.Module]):
+        def deep_pos_eval(m: _typing.Union[_torch.nn.Module]):
             # if isinstance(m, GPUDirectModule):
             #     m._pos_eval(include_grads)
-            if isinstance(m, torch.nn.ModuleList):
+            if isinstance(m, _torch.nn.ModuleList):
                 for c in m:
                     deep_pos_eval(c)
             for k, mo in m._modules.items():
@@ -1198,12 +1196,12 @@ class GPUDirectModule(torch.nn.Module):
             if isinstance(m, GPUDirectModule):
                 for r in self._rdv_accessor.references():
                     if r is not None:
-                        if isinstance(r.obj, torch.Tensor):
-                            assert torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
+                        if isinstance(r.obj, _torch.Tensor):
+                            assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
                         r.mark_as_dirty()
                         r.invalidate()
-                        if isinstance(r.obj, torch.Tensor):
-                            assert torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
+                        if isinstance(r.obj, _torch.Tensor):
+                            assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
 
         deep_pos_eval(self)
 
@@ -1211,7 +1209,7 @@ class GPUDirectModule(torch.nn.Module):
 class MapBase(GPUDirectModule, metaclass=MapMeta):
     __extension_info__ = None  # none extension info marks the node as abstract
     __bindable__ = None
-    map_object_layout: typing.Callable[[int], vk.Layout] = None
+    map_object_layout: _typing.Callable[[int], _vk.Layout] = None
 
     def __init__(self, *args, **generics):
         array_size = 0 if len(args) == 0 else args[0]
@@ -1219,17 +1217,17 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
         is_generic = 'INPUT_DIM' not in generics or 'OUTPUT_DIM' not in generics
         # if not is_generic:
         instance_layout = type(self).map_object_layout(array_size)
-        map_buffer = vk.object_buffer(layout=instance_layout, usage=vk.BufferUsage.STORAGE,
-                                   memory=vk.MemoryLocation.CPU)
+        map_buffer = _vk.object_buffer(layout=instance_layout, usage=_vk.BufferUsage.STORAGE,
+                                   memory=_vk.MemoryLocation.CPU)
         object.__setattr__(self, '__bindable__', map_buffer)
         object.__setattr__(self, '_rdv_map_buffer', map_buffer)
-        object.__setattr__(self, '_rdv_trigger_bw', torch.tensor([0.0], requires_grad=True))
-        object.__setattr__(self, '_rdv_no_trigger_bw', torch.tensor([0.0], requires_grad=False))
+        object.__setattr__(self, '_rdv_trigger_bw', _torch.tensor([0.0], requires_grad=True))
+        object.__setattr__(self, '_rdv_no_trigger_bw', _torch.tensor([0.0], requires_grad=False))
         object.__setattr__(self, 'generics', generics)
         super().__init__(map_buffer.accessor)
 
     def has_generic_submap(self):
-        def deep_search(module: torch.nn.Module):
+        def deep_search(module: _torch.nn.Module):
             for k, m in module._modules.items():
                 if isinstance(m, MapBase):
                     if m.is_generic:
@@ -1241,20 +1239,20 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
             return False
         return deep_search(self)
 
-    @vk.lazy_constant
+    @_vk.lazy_constant
     def is_generic(self):
         return self.input_dim is None or self.output_dim is None or self.has_generic_submap()
 
-    @vk.lazy_constant
+    @_vk.lazy_constant
     def is_generic_input(self):
         return self.input_dim is None
 
-    @vk.lazy_constant
+    @_vk.lazy_constant
     def is_generic_output(self):
         return self.output_dim is None
 
     @staticmethod
-    def match_input(*maps: 'MapBase') -> typing.Tuple['MapBase', ...]:
+    def match_input(*maps: 'MapBase') -> _typing.Tuple['MapBase', ...]:
         input_dim = None
         for m in maps:
             input_dim = input_dim or m.input_dim
@@ -1271,11 +1269,11 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
             return maps
         return tuple(m.cast(output_dim=output_dim) for m in maps)
 
-    @vk.lazy_constant
+    @_vk.lazy_constant
     def is_scalar_output(self):
         return self.output_dim is not None and self.output_dim == 1
 
-    def cast(self, input_dim: typing.Optional[int] = None, output_dim: typing.Optional[int] = None):
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
         """
         This method sould be overriden in all maps that support generics to create
         a generic instance. Always check if the map type satisfies input and output dimensions.
@@ -1287,15 +1285,15 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
             return self.promote(output_dim)  # Automatic map promotion
         return self
 
-    @vk.lazy_constant
-    def input_dim(self) -> typing.Optional[int]:
+    @_vk.lazy_constant
+    def input_dim(self) -> _typing.Optional[int]:
         return self.generics.get('INPUT_DIM', None)
 
-    @vk.lazy_constant
-    def output_dim(self) -> typing.Optional[int]:
+    @_vk.lazy_constant
+    def output_dim(self) -> _typing.Optional[int]:
         return self.generics.get('OUTPUT_DIM', None)
 
-    def get_maximum(self) -> torch.Tensor:
+    def get_maximum(self) -> _torch.Tensor:
         raise NotImplementedError()
 
     def support_maximum_query(self) -> bool:
@@ -1354,27 +1352,27 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
             return ComposePromoteMap(self, dim=next_map.output_dim)
         return CompositionMap(self, next_map)
 
-    def promote(self, output_dim: typing.Optional[int] = None) -> 'MapBase':
+    def promote(self, output_dim: _typing.Optional[int] = None) -> 'MapBase':
         return ComposePromoteMap(self, output_dim)
 
     @staticmethod
-    def as_map(data: typing.Union[int, float, torch.Tensor, 'MapBase']):
+    def as_map(data: _typing.Union[int, float, _torch.Tensor, 'MapBase']):
         if isinstance(data, MapBase):
             return data
         if isinstance(data, int) or isinstance(data, float):
-            t = vk.tensor(1, dtype=torch.float32)
+            t = _vk.tensor(1, dtype=_torch.float32)
             t[:] = data
             return ConstantMap(t)
-        if isinstance(data, torch.Tensor):
+        if isinstance(data, _torch.Tensor):
             return ConstantMap(data)
         raise Exception(f"Can not convert type {type(data)} into a map")
 
     def like_this(self, o):
         if isinstance(o, int) or isinstance(o, float):
-            t = vk.tensor(self.output_dim, dtype=torch.float32)
+            t = _vk.tensor(self.output_dim, dtype=_torch.float32)
             t[:] = o
             return ConstantMap(t, input_dim=self.input_dim)
-        if isinstance(o, torch.Tensor):
+        if isinstance(o, _torch.Tensor):
             o = ConstantMap(o, input_dim=self.input_dim)
         if isinstance(o, MapBase):
             if o.output_dim == self.output_dim:
@@ -1442,65 +1440,65 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
         return self.then(MatrixMultMap(other, premul=True))
 
 
-# class ParameterizedAutograd(torch.autograd.Function):
+# class ParameterizedAutograd(_torch.autograd.Function):
 #     @staticmethod
-#     def forward(ctx: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+#     def forward(ctx: _typing.Any, *args: _typing.Any, **kwargs: _typing.Any) -> _typing.Any:
 #         process, *p = args
-#         input_p = [torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
-#         with torch.enable_grad():
+#         input_p = [_torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
+#         with _torch.enable_grad():
 #             outputs = process(*input_p)
-#             if isinstance(outputs, torch.Tensor):
+#             if isinstance(outputs, _torch.Tensor):
 #                 outputs = [outputs]
 #             os = [o.clone() for o in outputs]
 #         ctx.input_count = len(p)
 #         ctx.save_for_backward(*p, *input_p, *os)
-#         if not isinstance(outputs, torch.Tensor) and len(outputs) == 1:
+#         if not isinstance(outputs, _torch.Tensor) and len(outputs) == 1:
 #             return outputs[0]
 #         return outputs
 #
 #     @staticmethod
-#     def backward(ctx: typing.Any, *grad_outputs: typing.Any) -> typing.Any:
+#     def backward(ctx: _typing.Any, *grad_outputs: _typing.Any) -> _typing.Any:
 #         input_count = ctx.input_count
 #         p = ctx.saved_tensors[:input_count]
 #         input_p = ctx.saved_tensors[input_count:input_count*2]
 #         outputs = ctx.saved_tensors[input_count*2:]
-#         with torch.enable_grad():
-#             # grads = torch.autograd.grad(outputs, input_p, grad_outputs, allow_unused=True)
-#             torch.autograd.backward(outputs, grad_outputs)
+#         with _torch.enable_grad():
+#             # grads = _torch.autograd.grad(outputs, input_p, grad_outputs, allow_unused=True)
+#             _torch.autograd.backward(outputs, grad_outputs)
 #         return None, *tuple(None if t.grad is None else t.grad.clone() for t in input_p)
 
 
 
-class ParameterizedAutograd(torch.autograd.Function):
+class ParameterizedAutograd(_torch.autograd.Function):
     @staticmethod
-    def forward(ctx: typing.Any, *args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+    def forward(ctx: _typing.Any, *args: _typing.Any, **kwargs: _typing.Any) -> _typing.Any:
         process, *p = args
-        input_p = [torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
+        input_p = [_torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
         ctx.process = process
         ctx.save_for_backward(*p)
         return process(*input_p)
 
-        # input_p = [torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
-        # with torch.enable_grad():
+        # input_p = [_torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
+        # with _torch.enable_grad():
         #     outputs = process(*input_p)
-        #     if isinstance(outputs, torch.Tensor):
+        #     if isinstance(outputs, _torch.Tensor):
         #         outputs = [outputs]
         #     os = [o.clone() for o in outputs]
         # ctx.input_count = len(p)
         # ctx.save_for_backward(*p, *input_p, *os)
-        # if not isinstance(outputs, torch.Tensor) and len(outputs) == 1:
+        # if not isinstance(outputs, _torch.Tensor) and len(outputs) == 1:
         #     return outputs[0]
         # return outputs
 
     @staticmethod
-    def backward(ctx: typing.Any, *grad_outputs: typing.Any) -> typing.Any:
+    def backward(ctx: _typing.Any, *grad_outputs: _typing.Any) -> _typing.Any:
         process = ctx.process
         p = list(ctx.saved_tensors)
-        with torch.enable_grad():
-            input_p = [torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
+        with _torch.enable_grad():
+            input_p = [_torch.nn.Parameter(t, requires_grad=t.requires_grad) for t in p]
             outputs = process(*input_p)
-            grads = torch.autograd.grad(outputs, input_p, grad_outputs, allow_unused=True)
-            # torch.autograd.backward(outputs, grad_outputs)
+            grads = _torch.autograd.grad(outputs, input_p, grad_outputs, allow_unused=True)
+            # _torch.autograd.backward(outputs, grad_outputs)
         return None, *grads  #tuple(None if t.grad is None else t.grad.clone() for t in input_p)
 
 
@@ -1512,7 +1510,7 @@ def parameterized_call(callable, *args):
 
 
 class StructModule(GPUDirectModule):
-    def __init__(self, accessor: vk.ObjectBufferAccessor):
+    def __init__(self, accessor: _vk.ObjectBufferAccessor):
         super().__init__(accessor)
 
 
@@ -1595,7 +1593,7 @@ FORWARD {{
     )
 
 
-class AutogradMapFunction(torch.autograd.Function):
+class AutogradMapFunction(_torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, *args):
@@ -1613,7 +1611,7 @@ class AutogradMapFunction(torch.autograd.Function):
         return (input_grad, None, None)  # append None to refer to renderer object passed in forward
 
 
-class AutogradCaptureFunction(torch.autograd.Function):
+class AutogradCaptureFunction(_torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, *args):
@@ -1638,18 +1636,18 @@ class AutogradCaptureFunction(torch.autograd.Function):
         debug_out = ctx.debug_out
         DispatcherEngine.eval_capture_backward(capture, field, output_grad, sensors, batch_size, bw_samples, debug_out)
         # print(f"[DEBUG] Backward grads from renderer {grad_inputs[0].mean()}")
-        # assert grad_inputs[0] is None or torch.isnan(grad_inputs[0]).sum() == 0, "error in generated grads."
+        # assert grad_inputs[0] is None or _torch.isnan(grad_inputs[0]).sum() == 0, "error in generated grads."
         return (None, None, None, None, None, None, None) + tuple(p.grad for p in ctx.saved_tensors)  # append None to refer to renderer object passed in forward
 
 
 class ActivationMap(MapBase):
     __extension_info__ = None
 
-    def __init__(self, dimension: typing.Optional[int] = None):
+    def __init__(self, dimension: _typing.Optional[int] = None):
         dims = { } if dimension is None else dict(INPUT_DIM=dimension, OUTPUT_DIM=dimension)
         super().__init__(**dims)
 
-    def cast(self, input_dim: typing.Optional[int] = None, output_dim: typing.Optional[int] = None):
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
         assert input_dim is None or output_dim is None or input_dim == output_dim
         cast_dim = input_dim or output_dim
         if cast_dim is None:
@@ -1669,11 +1667,11 @@ class Identity(ActivationMap):
         bw_implementations=BACKWARD_IMPLEMENTATIONS.DEFAULT
     )
     #
-    # def __init__(self, dimension: typing.Optional[int] = None):
+    # def __init__(self, dimension: _typing.Optional[int] = None):
     #     dims = { } if dimension is None else dict(INPUT_DIM=dimension, OUTPUT_DIM=dimension)
     #     super(Identity, self).__init__(**dims)
     #
-    # def cast(self, input_dim: typing.Optional[int] = None, output_dim: typing.Optional[int] = None):
+    # def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
     #     assert input_dim is None or output_dim is None or input_dim == output_dim
     #     cast_dim = input_dim or output_dim
     #     if cast_dim is None:
@@ -1689,12 +1687,12 @@ class Identity(ActivationMap):
 class SensorsBase(MapBase):
     __extension_info__ = None  # Abstract node
 
-    def __init__(self, index_shape: typing.List[int], **generics):
+    def __init__(self, index_shape: _typing.List[int], **generics):
         super(SensorsBase, self).__init__(INPUT_DIM=len(index_shape), **generics)
         object.__setattr__(self, 'identity', Identity(self.output_dim))
-        object.__setattr__(self, 'index_shape', torch.tensor(index_shape + ([0] * (4 - len(index_shape)))))
-        object.__setattr__(self, '_rdv_trigger_bw', torch.tensor([0.0], requires_grad=True))
-        object.__setattr__(self, '_rdv_no_trigger_bw', torch.tensor([0.0], requires_grad=False))
+        object.__setattr__(self, 'index_shape', _torch.tensor(index_shape + ([0] * (4 - len(index_shape)))))
+        object.__setattr__(self, '_rdv_trigger_bw', _torch.tensor([0.0], requires_grad=True))
+        object.__setattr__(self, '_rdv_no_trigger_bw', _torch.tensor([0.0], requires_grad=False))
 
     # def measurement_point_dim(self):
     #     return self.output_dim
@@ -1705,8 +1703,8 @@ class SensorsBase(MapBase):
     # def forward_torch(self, *args):
     #     if len(args) == 0 or args[0] is None:
     #         dims = self.index_shape[:self.input_dim]
-    #         sensors = torch.cartesian_prod(
-    #             *[torch.arange(0, d, dtype=torch.long, device=torch.device('cuda:0')) for d in dims])
+    #         sensors = _torch.cartesian_prod(
+    #             *[_torch.arange(0, d, dtype=_torch.long, device=_torch.device('cuda:0')) for d in dims])
     #     else:
     #         sensors, = args
     #     return self.generate_measuring_points_torch(sensors)
@@ -1723,7 +1721,7 @@ class SensorsBase(MapBase):
             sensors, = args
         return self.capture(self.identity, sensors, None, 1, 1)
 
-    # def capture_torch(self, field: 'MapBase', sensors_batch: Optional[torch.Tensor] = None, fw_samples: int = 1):
+    # def capture_torch(self, field: 'MapBase', sensors_batch: Optional[_torch.Tensor] = None, fw_samples: int = 1):
     #     # TODO: Implement a torch base replay backpropagation for stochastic processes
     #     output = None
     #     for _ in range(fw_samples):
@@ -1738,8 +1736,8 @@ class SensorsBase(MapBase):
     #         output = output.view(*self.index_shape[:self.input_dim], -1)
     #     return output
 
-    def capture(self, field: 'MapBase', sensors_batch: typing.Optional[torch.Tensor] = None, batch_size: typing.Optional[int] = None,
-                fw_samples: int = 1, bw_samples: int = 1, debug_out: typing.Optional[torch.Tensor] = None):
+    def capture(self, field: 'MapBase', sensors_batch: _typing.Optional[_torch.Tensor] = None, batch_size: _typing.Optional[int] = None,
+                fw_samples: int = 1, bw_samples: int = 1, debug_out: _typing.Optional[_torch.Tensor] = None):
         # if not __USE_VULKAN_DISPATCHER__:
         #     return self.capture_torch(field, sensors_batch, fw_samples)
         field = field.cast(input_dim=self.output_dim)
@@ -1748,24 +1746,24 @@ class SensorsBase(MapBase):
             # True for _ in field.parameters()) else self._rdv_no_trigger_bw
         return AutogradCaptureFunction.apply(sensors_batch, batch_size, fw_samples, bw_samples, field, self, debug_out, *triggers)
 
-    def random_sensors(self, batch_size: int, out: typing.Optional[torch.Tensor] = None) -> torch.Tensor:
+    def random_sensors(self, batch_size: int, out: _typing.Optional[_torch.Tensor] = None) -> _torch.Tensor:
         # if out is not None:
-        #     out.copy_((torch.rand(batch_size, self.input_dim, device=device()) * self.index_shape[:self.input_dim].to(
+        #     out.copy_((_torch.rand(batch_size, self.input_dim, device=device()) * self.index_shape[:self.input_dim].to(
         #         device())).long())
         # else:
-        #     out = (torch.rand(batch_size, self.input_dim, device=device()) * self.index_shape[:self.input_dim].to(
+        #     out = (_torch.rand(batch_size, self.input_dim, device=device()) * self.index_shape[:self.input_dim].to(
         #         device())).long()
         # return out
         if out is None:
-            # out = torch.zeros(batch_size, self.input_dim, dtype=torch.long, device=device())
-            out = vk.tensor(batch_size, self.input_dim, dtype=torch.long)
+            # out = _torch.zeros(batch_size, self.input_dim, dtype=_torch.long, device=device())
+            out = _vk.tensor(batch_size, self.input_dim, dtype=_torch.long)
         return _functions.random_ids(batch_size, self.index_shape[:self.input_dim], out=out)
 
 
 class PerspectiveCameraSensor(SensorsBase):
     __extension_info__ = dict(
         parameters=dict(
-            poses=torch.Tensor,
+            poses=_torch.Tensor,
             width=int,
             height=int,
             generation_mode=int,
@@ -1776,8 +1774,8 @@ class PerspectiveCameraSensor(SensorsBase):
         path=_internal.__INCLUDE_PATH__+"/maps/sensor_perspective_camera.h"
     )
 
-    def __init__(self, width: int, height: int, poses: torch.Tensor, *, fov: float = np.pi / 4, jittered: bool = False):
-        super(PerspectiveCameraSensor, self).__init__([len(poses), height, width])
+    def __init__(self, width: int, height: int, poses: _torch.Tensor, *, fov: float = _np.pi / 4, jittered: bool = False):
+        super(PerspectiveCameraSensor, self).__init__([poses.numel() // 9, height, width])
         self.poses = poses
         self.fov = fov
         self.znear = 0.001
@@ -1789,16 +1787,16 @@ class PerspectiveCameraSensor(SensorsBase):
     #     o = self.poses[indices[:, 0], 0:3]
     #     d = self.poses[indices[:, 0], 3:6]
     #     n = self.poses[indices[:, 0], 6:9]
-    #     dim = torch.tensor([self.height, self.width], dtype=torch.float, device=indices.device)
+    #     dim = _torch.tensor([self.height, self.width], dtype=_torch.float, device=indices.device)
     #     s = ((indices[:, 1:3] + 0.5) * 2 - dim) * self.znear / self.height
-    #     t = np.float32(self.znear / np.float32(np.tan(np.float32(self.fov) * np.float32(0.5))))
+    #     t = _np.float32(self.znear / _np.float32(_np.tan(_np.float32(self.fov) * _np.float32(0.5))))
     #     zaxis = vec3.normalize(d)
     #     xaxis = vec3.normalize(vec3.cross(n, zaxis))
     #     yaxis = vec3.cross(zaxis, xaxis)
     #     w = xaxis * s[:, 1:2] + yaxis * s[:, 0:1] + zaxis * t
     #     x = o + w
     #     w = vec3.normalize(w)
-    #     return torch.cat([x, w], dim=-1)
+    #     return _torch.cat([x, w], dim=-1)
 
 
 class CompositionMap(MapBase):
@@ -1828,7 +1826,7 @@ class CompositionMap(MapBase):
         self.inner = inner
         self.outter = outter
 
-    def cast(self, input_dim: typing.Optional[int] = None, output_dim: typing.Optional[int] = None):
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
         inner = self.inner.cast(input_dim=input_dim)
         outter = self.outter.cast(output_dim=output_dim)
         if self.inner is inner and self.outter is outter:  # cast didnt change
@@ -1862,7 +1860,7 @@ class CustomGradMap(MapBase):
         self.fw = fw
         self.bw = bw
 
-    def cast(self, input_dim: typing.Optional[int] = None, output_dim: typing.Optional[int] = None):
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
         fw = self.fw.cast(input_dim, output_dim)
         bw = self.bw.cast(input_dim, output_dim)
         if fw is self.fw and bw is self.bw:
@@ -1899,7 +1897,7 @@ class BinaryOpMap(MapBase):
         self.map_a = map_a
         self.map_b = map_b
 
-    def cast(self, input_dim: typing.Optional[int] = None, output_dim: typing.Optional[int] = None):
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
         map_a = self.map_a.cast(input_dim=input_dim, output_dim=output_dim)
         map_b = self.map_b.cast(input_dim=input_dim, output_dim=output_dim)
         if map_a is self.map_a and map_b is self.map_b:
@@ -1930,7 +1928,7 @@ class ComposePromoteMap(MapBase):
         path=_internal.__INCLUDE_PATH__+'/maps/compose_promote.h'
     )
 
-    def __init__(self, map: MapBase, dim: typing.Optional[int] = None):
+    def __init__(self, map: MapBase, dim: _typing.Optional[int] = None):
         map = map.cast(output_dim=1)
         # assert map.output_dim == 1, 'Promotion is only valid for single valued maps'
         dims = { 'INPUT_DIM': map.input_dim }
@@ -1963,9 +1961,9 @@ class ConstantMap(MapBase):
         path=_internal.__INCLUDE_PATH__+'/maps/constant.h'
     )
 
-    def __init__(self, value: typing.Union[torch.Tensor, torch.nn.Parameter], input_dim: typing.Optional[int] = None):
+    def __init__(self, value: _typing.Union[_torch.Tensor, _torch.nn.Parameter], input_dim: _typing.Optional[int] = None):
         assert len(value.shape) <= 1, f"Error {value.shape}"
-        assert value.dtype == torch.float
+        assert value.dtype == _torch.float
         dims = {'OUTPUT_DIM': value.numel()}
         if input_dim is not None:
             dims.update(INPUT_DIM=input_dim)
@@ -2017,7 +2015,7 @@ class MatrixMultMap(MapBase):
         path=_internal.__INCLUDE_PATH__+'/maps/matmul.h'
     )
 
-    def __init__(self, matrix: torch.Tensor, premul: bool = False):
+    def __init__(self, matrix: _torch.Tensor, premul: bool = False):
         assert len(matrix.shape) == 2
         if premul:
             dims = dict(INPUT_DIM=matrix.shape[1], OUTPUT_DIM=matrix.shape[0])
@@ -2038,7 +2036,7 @@ class ComposeSelectMap(MapBase):
         path=_internal.__INCLUDE_PATH__ + '/maps/compose_select.h'
     )
 
-    def __init__(self, map: MapBase, indices: typing.List[int]):
+    def __init__(self, map: MapBase, indices: _typing.List[int]):
         if map.output_dim is not None:
             assert all(i >= 0 and i<map.output_dim for i in indices)
         super(ComposeSelectMap, self).__init__(
@@ -2067,7 +2065,7 @@ class InputSelectMap(MapBase):
         path=_internal.__INCLUDE_PATH__+'/maps/input_select.h'
     )
 
-    def __init__(self, input_dim: int, indices: typing.List[int]):
+    def __init__(self, input_dim: int, indices: _typing.List[int]):
         assert all(i >= 0 and i<input_dim for i in indices)
         super(InputSelectMap, self).__init__(
             INPUT_DIM=input_dim,
@@ -2095,7 +2093,20 @@ class InputPromoteMap(MapBase):
 
 class ReluMap(ActivationMap):
     __extension_info__ = dict(
-        path=_internal.__INCLUDE_PATH__ + '/maps/relu.h',
+        path=_internal.__INCLUDE_PATH__ + '/maps/f_relu.h',
+        bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT
+    )
+
+class SinMap(ActivationMap):
+    __extension_info__ = dict(
+        path=_internal.__INCLUDE_PATH__ + '/maps/f_sin.h',
+        bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT
+    )
+
+
+class CosMap(ActivationMap):
+    __extension_info__ = dict(
+        path=_internal.__INCLUDE_PATH__ + '/maps/f_cos.h',
         bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT
     )
 
@@ -2105,9 +2116,9 @@ class ReluMap(ActivationMap):
 # class CameraSensor(SensorsBase):
 #     __extension_info__ = dict(
 #         parameters=dict(
-#             origin=torch.Tensor,
-#             direction=torch.Tensor,
-#             normal=torch.Tensor,
+#             origin=_torch.Tensor,
+#             direction=_torch.Tensor,
+#             normal=_torch.Tensor,
 #             width=int,
 #             height=int,
 #             generation_mode=int,
@@ -2151,16 +2162,16 @@ class ReluMap(ActivationMap):
 #
 #     def __init__(self, width: int, height: int, cameras: int = 1, jittered: bool = False):
 #         super(CameraSensor, self).__init__([cameras, height, width])
-#         self.origin = tensor(cameras, 3, dtype=torch.float32)
-#         self.direction = tensor(cameras, 3, dtype=torch.float32)
-#         self.normal = tensor(cameras, 3, dtype=torch.float32)
+#         self.origin = tensor(cameras, 3, dtype=_torch.float32)
+#         self.direction = tensor(cameras, 3, dtype=_torch.float32)
+#         self.normal = tensor(cameras, 3, dtype=_torch.float32)
 #         self.origin[:] = 0.0
 #         self.origin[:, 2] = -1.0
 #         self.direction[:] = 0.0
 #         self.direction[:, 2] = 1.0
 #         self.normal[:] = 0.0
 #         self.normal[:, 1] = 1.0
-#         self.fov = np.pi / 4
+#         self.fov = _np.pi / 4
 #         self.znear = 0.001
 #         self.width = width
 #         self.height = height
@@ -2170,16 +2181,16 @@ class ReluMap(ActivationMap):
 #         o = self.origin[indices[:, 0]]
 #         d = self.direction[indices[:, 0]]
 #         n = self.normal[indices[:, 0]]
-#         dim = torch.tensor([self.height, self.width], dtype=torch.float, device=indices.device)
+#         dim = _torch.tensor([self.height, self.width], dtype=_torch.float, device=indices.device)
 #         s = ((indices[:, 1:3] + 0.5) * 2 - dim) * self.znear / self.height
-#         t = np.float32(self.znear / np.float32(np.tan(np.float32(self.fov) * np.float32(0.5))))
+#         t = _np.float32(self.znear / _np.float32(_np.tan(_np.float32(self.fov) * _np.float32(0.5))))
 #         zaxis = vec3.normalize(d)
 #         xaxis = vec3.normalize(vec3.cross(n, zaxis))
 #         yaxis = vec3.cross(zaxis, xaxis)
 #         w = xaxis * s[:, 1:2] + yaxis * s[:, 0:1] + zaxis * t
 #         x = o + w
 #         w = vec3.normalize(w)
-#         return torch.cat([x, w], dim=-1)
+#         return _torch.cat([x, w], dim=-1)
 
 
 class Grid3DSensor(SensorsBase):
@@ -2207,8 +2218,8 @@ class Grid3DSensor(SensorsBase):
         self.box_max = box_max.clone()
 
     def generate_measuring_points_torch(self, indices):
-        dim = torch.tensor([self.depth - 1, self.height - 1, self.width - 1], dtype=torch.float, device=indices.device)
-        subsample = torch.randn(*indices.shape, device=indices.device) * self.sd
+        dim = _torch.tensor([self.depth - 1, self.height - 1, self.width - 1], dtype=_torch.float, device=indices.device)
+        subsample = _torch.randn(*indices.shape, device=indices.device) * self.sd
         bmin = self.box_min.to(indices.device)
         bmax = self.box_max.to(indices.device)
         return ((indices + subsample) / dim) * (bmax - bmin) + bmin
@@ -2266,7 +2277,7 @@ class Grid2D(MapBase):
         path=_internal.__INCLUDE_PATH__ + '/maps/grid2d.h'
     )
 
-    def __init__(self, grid: typing.Union[torch.Tensor, torch.nn.Parameter], bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
+    def __init__(self, grid: _typing.Union[_torch.Tensor, _torch.nn.Parameter], bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
         assert len(grid.shape) == 3
         super(Grid2D, self).__init__(OUTPUT_DIM=grid.shape[-1])
         self.grid = parameter(grid)
@@ -2276,7 +2287,7 @@ class Grid2D(MapBase):
     def forward_torch(self, *args):
         x, = args
         x = 2 * (x - self.bmin.to(self.grid.device)) * self.inv_bsize.to(self.grid.device) - 1
-        return torch.nn.functional.grid_sample(
+        return _torch.nn.functional.grid_sample(
             self.grid.unsqueeze(0).permute(0, 3, 1, 2),
             x.reshape(1, len(x), 1, -1),
             mode='bilinear',
@@ -2297,7 +2308,7 @@ class Image2D(MapBase):
         path=_internal.__INCLUDE_PATH__ + '/maps/image2d.h'
     )
 
-    def __init__(self, grid: typing.Union[torch.Tensor, torch.nn.Parameter], bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
+    def __init__(self, grid: _typing.Union[_torch.Tensor, _torch.nn.Parameter], bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
         assert len(grid.shape) == 3
         super(Image2D, self).__init__(OUTPUT_DIM=grid.shape[-1])
         self.grid = parameter(grid)
@@ -2307,7 +2318,7 @@ class Image2D(MapBase):
     def forward_torch(self, *args):
         x, = args
         x = 2 * (x - self.bmin.to(self.grid.device)) * self.inv_bsize.to(self.grid.device) - 1
-        return torch.nn.functional.grid_sample(
+        return _torch.nn.functional.grid_sample(
             self.grid.unsqueeze(0).permute(0, 3, 1, 2),
             x.reshape(1, len(x), 1, -1),
             mode='bilinear',
@@ -2328,7 +2339,7 @@ class Grid3D(MapBase):
         path=_internal.__INCLUDE_PATH__ + '/maps/grid3d.h'
     )
 
-    def __init__(self, grid: torch.Tensor, bmin: vec3 = vec3(-1.0, -1.0, -1.0), bmax: vec3 = vec3(1.0, 1.0, 1.0)):
+    def __init__(self, grid: _torch.Tensor, bmin: vec3 = vec3(-1.0, -1.0, -1.0), bmax: vec3 = vec3(1.0, 1.0, 1.0)):
         assert len(grid.shape) == 4
         super(Grid3D, self).__init__(OUTPUT_DIM=grid.shape[-1])
         self.grid = parameter(grid)
@@ -2342,7 +2353,7 @@ class Grid3D(MapBase):
     def forward_torch(self, *args):
         x, = args
         x = 2 * (x - self.bmin.to(self.grid.device)) * self.inv_bsize.to(self.grid.device) - 1
-        return torch.nn.functional.grid_sample(
+        return _torch.nn.functional.grid_sample(
             self.grid.unsqueeze(0).permute(0, 4, 1, 2, 3),
             x.reshape(1, len(x), 1, 1, -1),
             mode='bilinear',
@@ -2369,40 +2380,40 @@ class Transformed3DMap(MapBase):
     __extension_info__ = dict(
         parameters=dict(
             base_map=MapBase,
-            transform=vk.mat4,
-            inverse_transform=vk.mat4
+            transform=_vk.mat4,
+            inverse_transform=_vk.mat4
         ),
         generics=dict(INPUT_DIM=3),
         bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT,
         path = _internal.__INCLUDE_PATH__ + '/maps/transform_3D_map.h'
     )
 
-    def __init__(self, base_map: MapBase, transform: vk.mat4 ):
+    def __init__(self, base_map: MapBase, transform: _vk.mat4 ):
         assert base_map.input_dim == 3
         super().__init__(OUTPUT_DIM=base_map.output_dim)
         self.base_map = base_map
         self.transform = transform
-        self.inverse_transform = vk.mat4.inverse(transform)
+        self.inverse_transform = _vk.mat4.inverse(transform)
 
 
 class TransformedRayMap(MapBase):
     __extension_info__ = dict(
         parameters=dict(
             base_map=MapBase,
-            transform=vk.mat4,
-            inverse_transform=vk.mat4
+            transform=_vk.mat4,
+            inverse_transform=_vk.mat4
         ),
         generics=dict(INPUT_DIM=6),
         bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT,
         path = _internal.__INCLUDE_PATH__ + '/maps/transform_ray_map.h'
     )
 
-    def __init__(self, base_map: MapBase, transform: vk.mat4 ):
+    def __init__(self, base_map: MapBase, transform: _vk.mat4 ):
         assert base_map.input_dim == 6
         super().__init__(OUTPUT_DIM=base_map.output_dim)
         self.base_map = base_map
         self.transform = transform
-        self.inverse_transform = vk.mat4.inverse(transform)
+        self.inverse_transform = _vk.mat4.inverse(transform)
 
 
 class XRProjection(MapBase):
@@ -2426,9 +2437,9 @@ class XRProjection(MapBase):
         else:
             w, = args
         #    vec2 c = vec2((atan(w.z, w.x) + pi) / (2 * pi), acos(clamp(w.y, -1.0, 1.0)) / pi); // two floats for coordinates
-        a = (torch.atan2(w[:,0:1], w[:,2:3])) / np.pi
-        b = 2 * torch.acos(torch.clamp(w[:, 1:2], -1.0, 1.0)) / np.pi - 1
-        return torch.cat([a, b], dim=-1)
+        a = (_torch.atan2(w[:,0:1], w[:,2:3])) / _np.pi
+        b = 2 * _torch.acos(_torch.clamp(w[:, 1:2], -1.0, 1.0)) / _np.pi - 1
+        return _torch.cat([a, b], dim=-1)
 
 
 class OctProjection(MapBase):
@@ -2494,7 +2505,7 @@ class UniformDirectionSampler(MapBase):
 class XRQuadtreeRandomDirection(MapBase):
     __extension_info__ = dict(
         parameters=dict(
-            densities=torch.Tensor,
+            densities=_torch.Tensor,
             levels=int
         ),
         generics=dict(OUTPUT_DIM=4),
@@ -2543,7 +2554,7 @@ class XRQuadtreeRandomDirection(MapBase):
             """,
     )
 
-    def __init__(self, input_dim: int, densities: torch.Tensor, levels: int):
+    def __init__(self, input_dim: int, densities: _torch.Tensor, levels: int):
         super(XRQuadtreeRandomDirection, self).__init__(INPUT_DIM=input_dim)
         self.densities = densities
         self.levels = levels
@@ -2605,7 +2616,7 @@ class GridRatiotrackingTransmittance(MapBase):
         self.box_max = grid.bmax.clone()
         self.boundary = boundary.cast(6, 2)
 
-    def update_grid(self, grid: typing.Optional[Grid3D] = None):
+    def update_grid(self, grid: _typing.Optional[Grid3D] = None):
         if grid is None:
             assert self.grid_model is not None
             grid = self.grid_model
@@ -2656,7 +2667,7 @@ class GridDDATransmittance(MapBase):
         self.grid_model = None
         self.update_grid(grid)
 
-    def update_grid(self, grid: typing.Optional[Grid3D] = None):
+    def update_grid(self, grid: _typing.Optional[Grid3D] = None):
         if grid is None:
             assert self.grid_model is not None
             grid = self.grid_model
@@ -2692,9 +2703,9 @@ class DeltatrackingTransmittance(MapBase):
 
     def __init__(self, sigma: MapBase, boundary: MapBase, majorant: MapBase):
         super(DeltatrackingTransmittance, self).__init__()
-        self.sigma = sigma
-        self.boundary = boundary
-        self.majorant = majorant
+        self.sigma = sigma.cast(3,1)
+        self.boundary = boundary.cast(6, 2)
+        self.majorant = majorant.cast(6, 2)
 
 
 class RaymarchingTransmittance(MapBase):
@@ -2841,7 +2852,7 @@ class GridDDACollisionIntegrator(MapBase):
         self.environment = environment.cast(3, 3)
         self.boundary = boundary.cast(6, 2)
 
-    def update_grid(self, grid: typing.Optional[Grid3D] = None):
+    def update_grid(self, grid: _typing.Optional[Grid3D] = None):
         if grid is None:
             assert self.sigma_grid is not None
             grid = self.sigma_grid
@@ -3247,7 +3258,7 @@ class RayToSegment(MapBase):
         x = xw[..., 0:3]
         w = xw[..., 3:6]
         d = self.distance_field(xw)
-        return torch.cat([x, x + w*d], dim=-1)
+        return _torch.cat([x, x + w*d], dim=-1)
 
 
 class LineIntegrator(MapBase):
@@ -4056,9 +4067,9 @@ class TransmittanceDDA(MapBase):
                     """,
     )
 
-    def __init__(self, grid: torch.Tensor, box_min: vec3 = vec3(-1.0, -1.0, -1.0), box_max: vec3 = vec3(1.0, 1.0, 1.0)):
+    def __init__(self, grid: _torch.Tensor, box_min: vec3 = vec3(-1.0, -1.0, -1.0), box_max: vec3 = vec3(1.0, 1.0, 1.0)):
         super(TransmittanceDDA, self).__init__()
-        self.grid = torch.nn.Parameter(grid)
+        self.grid = _torch.nn.Parameter(grid)
         self.box_min = box_min.clone()
         self.box_max = box_max.clone()
 
@@ -4592,37 +4603,37 @@ def map_to_generic(map_name: str):
 #         self.box_min = box_min
 #         self.box_max = box_max
 #
-#     def intersect_ray_box(self, x: torch.Tensor, w: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-#         w = torch.where(torch.abs(w) <= 0.000001, torch.full_like(w, fill_value=0.000001), w)
+#     def intersect_ray_box(self, x: _torch.Tensor, w: _torch.Tensor) -> Tuple[_torch.Tensor, _torch.Tensor, _torch.Tensor]:
+#         w = _torch.where(_torch.abs(w) <= 0.000001, _torch.full_like(w, fill_value=0.000001), w)
 #         C_Min = (self.box_min.to(x.device) - x)/w
 #         C_Max = (self.box_max.to(x.device) - x)/w
-#         min_C = torch.minimum(C_Min, C_Max)
-#         max_C = torch.maximum(C_Min, C_Max)
-#         tMin = torch.clamp_min(torch.max(min_C, dim=-1, keepdim=True)[0], 0.0)
-#         tMax = torch.min(max_C, dim=-1, keepdim=True)[0]
+#         min_C = _torch.minimum(C_Min, C_Max)
+#         max_C = _torch.maximum(C_Min, C_Max)
+#         tMin = _torch.clamp_min(_torch.max(min_C, dim=-1, keepdim=True)[0], 0.0)
+#         tMax = _torch.min(max_C, dim=-1, keepdim=True)[0]
 #         return (tMax > tMin)*(tMax > 0), tMin, tMax
 #
-#     def ray_enter(self, x: torch.Tensor, w: torch.Tensor):
+#     def ray_enter(self, x: _torch.Tensor, w: _torch.Tensor):
 #         mask, tMin, tMax = self.intersect_ray_box(x, w)
 #         return mask, x + w*tMin
 #
-#     def ray_exit(self, x: torch.Tensor, w: torch.Tensor):
+#     def ray_exit(self, x: _torch.Tensor, w: _torch.Tensor):
 #         mask, tMin, tMax = self.intersect_ray_box(x, w)
 #         return tMax
 #
-#     def compute_radiance_torch(self, alive: torch.Tensor, x: torch.Tensor, w: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+#     def compute_radiance_torch(self, alive: _torch.Tensor, x: _torch.Tensor, w: _torch.Tensor) -> Tuple[_torch.Tensor, _torch.Tensor]:
 #         pass
 #
 #     def forward_torch(self, *args):
 #         xw, = args
 #         x = xw[...,0:3]
 #         w = xw[...,3:6]
-#         A = torch.zeros_like(x)
-#         W = torch.ones_like(x)
+#         A = _torch.zeros_like(x)
+#         W = _torch.ones_like(x)
 #         entered, x = self.ray_enter(x, w)
 #         Av, Wv = self.compute_radiance_torch(entered, x, w)
-#         W = torch.where(entered, Wv, W)
-#         A = torch.where(entered, Av, A)
+#         W = _torch.where(entered, Wv, W)
+#         A = _torch.where(entered, Av, A)
 #         A += W * self.environment(w)
 #         return A
 #
@@ -4657,9 +4668,9 @@ def map_to_generic(map_name: str):
 #     def __init__(self, sigma: 'MapBase', environment: 'MapBase', box_min:vec3, box_max: vec3):
 #         super(AbsorptionOnlyVolume, self).__init__(box_min, box_max, sigma = sigma, environment = environment)
 #
-#     def compute_tau(self, alive: torch.Tensor, x: torch.Tensor, w: torch.Tensor, d: torch.Tensor):
-#         tau = torch.zeros(*x.shape[:-1], 1, device=x.device)
-#         i = torch.zeros(*x.shape[:-1], 1, device=x.device)
+#     def compute_tau(self, alive: _torch.Tensor, x: _torch.Tensor, w: _torch.Tensor, d: _torch.Tensor):
+#         tau = _torch.zeros(*x.shape[:-1], 1, device=x.device)
+#         i = _torch.zeros(*x.shape[:-1], 1, device=x.device)
 #         dt = 0.005
 #         samples = (d / dt).int() + 1
 #         dw = w * dt
@@ -4673,15 +4684,15 @@ def map_to_generic(map_name: str):
 #
 #         return tau * d / samples
 #
-#     def compute_radiance_torch(self, alive: torch.Tensor, x: torch.Tensor, w: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+#     def compute_radiance_torch(self, alive: _torch.Tensor, x: _torch.Tensor, w: _torch.Tensor) -> Tuple[_torch.Tensor, _torch.Tensor]:
 #         """
 #         A = vec3(0.0);
 #         float d = ray_exit(x, w);
 #         W = vec3(1.0) * exp(-d);
 #         """
 #         d = self.ray_exit(x, w)
-#         A = torch.zeros_like(x)
-#         W = torch.ones_like(x) * torch.exp(-self.compute_tau(alive.clone(), x, w, d))
+#         A = _torch.zeros_like(x)
+#         W = _torch.ones_like(x) * _torch.exp(-self.compute_tau(alive.clone(), x, w, d))
 #         return A, W
 #
 
@@ -4716,9 +4727,9 @@ void volume_radiance_bw(map_object, vec3 x, vec3 w, vec3 dL_dR)
 #         supports_express=True,
 #         force_compilation=True,
 #         parameters=Layout.create_structure('scalar',
-#                                            sigma=torch.int64,
+#                                            sigma=_torch.int64,
 #                                            sigma_shape=ivec3,
-#                                            environment=torch.int64,
+#                                            environment=_torch.int64,
 #                                            environment_shape=ivec2,
 #                                            box_min=vec3,
 #                                            box_max=vec3,
@@ -4726,12 +4737,12 @@ void volume_radiance_bw(map_object, vec3 x, vec3 w, vec3 dL_dR)
 #                                            )
 #     )
 #
-#     def __init__(self, sigma: torch.Tensor, environment: torch.Tensor, box_min:vec3, box_max: vec3):
+#     def __init__(self, sigma: _torch.Tensor, environment: _torch.Tensor, box_min:vec3, box_max: vec3):
 #         super(AbsorptionOnlyXVolume, self).__init__(sigma, environment, box_min, box_max)
 #
-#     def compute_tau(self, alive: torch.Tensor, x: torch.Tensor, w: torch.Tensor, d: torch.Tensor):
-#         tau = torch.zeros(*x.shape[:-1], 1, device=x.device)
-#         i = torch.zeros(*x.shape[:-1], 1, device=x.device)
+#     def compute_tau(self, alive: _torch.Tensor, x: _torch.Tensor, w: _torch.Tensor, d: _torch.Tensor):
+#         tau = _torch.zeros(*x.shape[:-1], 1, device=x.device)
+#         i = _torch.zeros(*x.shape[:-1], 1, device=x.device)
 #         dt = 0.005
 #         samples = (d / dt).int() + 1
 #         dw = w * dt
@@ -4745,15 +4756,15 @@ void volume_radiance_bw(map_object, vec3 x, vec3 w, vec3 dL_dR)
 #
 #         return tau * d / samples
 #
-#     def compute_radiance_torch(self, alive: torch.Tensor, x: torch.Tensor, w: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+#     def compute_radiance_torch(self, alive: _torch.Tensor, x: _torch.Tensor, w: _torch.Tensor) -> Tuple[_torch.Tensor, _torch.Tensor]:
 #         """
 #         A = vec3(0.0);
 #         float d = ray_exit(x, w);
 #         W = vec3(1.0) * exp(-d);
 #         """
 #         d = self.ray_exit(x, w)
-#         A = torch.zeros_like(x)
-#         W = torch.ones_like(x) * torch.exp(-self.compute_tau(alive.clone(), x, w, d))
+#         A = _torch.zeros_like(x)
+#         W = _torch.ones_like(x) * _torch.exp(-self.compute_tau(alive.clone(), x, w, d))
 #         return A, W
 
 
@@ -4777,24 +4788,24 @@ class ParametricMap(object):
 
 
 
-def normalized_box(s: typing.Union[torch.Tensor, typing.List]) -> typing.Tuple[vec3, vec3]:
-    if isinstance(s, torch.Tensor):
+def normalized_box(s: _typing.Union[_torch.Tensor, _typing.List]) -> _typing.Tuple[vec3, vec3]:
+    if isinstance(s, _torch.Tensor):
         shape = s.shape
     else:
         shape = s
     max_dim = max(shape[0], shape[1], shape[2]) - 1
-    b_max : vec3 = vec3(shape[2] - 1, shape[1] - 1, shape[0] - 1) * 0.5 / max_dim
+    b_max : vec3 = vec3(shape[2] - 1, shape[1] - 1, shape[0] - 1) / max_dim
     b_min = -b_max
     return (b_min, b_max)
 
 
-def _const_factory(*args, input_dim: typing.Optional[int] = None):
+def _const_factory(*args, input_dim: _typing.Optional[int] = None):
     """
-    args: float values for the constant or a single torch.Tensor object
+    args: float values for the constant or a single _torch.Tensor object
     """
-    if len(args) == 1 and isinstance(args[0], torch.Tensor):
+    if len(args) == 1 and isinstance(args[0], _torch.Tensor):
         return ConstantMap(value=args[0], input_dim=input_dim)
-    return ConstantMap(value=torch.tensor([*args], device=_internal.device(), dtype=torch.float), input_dim=input_dim)
+    return ConstantMap(value=_torch.tensor([*args], device=_internal.device(), dtype=_torch.float), input_dim=input_dim)
 
 const = ParametricMap(_const_factory)
 """
@@ -4813,16 +4824,16 @@ ray_to_segment[ray_box_intersect[1]]
 """
     # return RayToSegment(distance_field)
 
-def grid2d(t: torch.Tensor, bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
+def grid2d(t: _torch.Tensor, bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
     return Grid2D(t, bmin, bmax)
 
-def image2d(t: torch.Tensor, bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
+def image2d(t: _torch.Tensor, bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
     return Image2D(t, bmin, bmax)
 
-def grid3d(t: torch.Tensor, bmin: vec3 = vec3(-1.0, -1.0, -1.0), bmax: vec3 = vec3(1.0, 1.0, 1.0)):
+def grid3d(t: _torch.Tensor, bmin: vec3 = vec3(-1.0, -1.0, -1.0), bmax: vec3 = vec3(1.0, 1.0, 1.0)):
     return Grid3D(t, bmin, bmax)
 
-def transmittance(sigma: 'MapBase', majorant: float = None, mode: typing.Literal['dt', 'rt'] = 'rt'):
+def transmittance(sigma: 'MapBase', majorant: float = None, mode: _typing.Literal['dt', 'rt'] = 'rt'):
     if majorant is None:
         assert isinstance(sigma, Grid3D)
         majorant = sigma.grid.max().item()
@@ -4878,7 +4889,7 @@ def spherical_projection(cls):
 def cylindrical_projection(cls):
     raise NotImplementedError()
 
-# def identity(input_dim: typing.Optional[int] = None):
+# def identity(input_dim: _typing.Optional[int] = None):
 #     return Identity(input_dim)
 
 X = Identity()
@@ -4917,6 +4928,52 @@ relu = ReluMap()
 """
 Performs relu activation on all values of input.
 """
+
+sin = SinMap()
+"""
+Performs sin function on all values of input.
+"""
+
+cos = CosMap()
+"""
+Performs cos function on all values of input.
+"""
+
+
+def _sampling_map(t: _torch.Tensor):
+    if len(t.shape) == 3:  # 2D grid
+        return Grid2D(t)
+    elif len(t.shape) == 4:
+        return Grid3D(t)
+    raise NotImplemented()
+
+
+sample = ParametricMap(_sampling_map)
+"""
+Represents a piece-wise linear interpolated field (2D or 3D) from -1.0 to 1.0
+using values of a tensor as a regular aligned grid.
+"""
+
+
+def look_at_poses(
+    camera: _typing.Union[vec3, _typing.Tuple[float, float, float]],
+    target: _typing.Optional[_typing.Union[vec3, _typing.Tuple[float, float, float]]] = None,
+    up: _typing.Optional[_typing.Union[vec3, _typing.Tuple[float, float, float]]] = None
+):
+    if target is None:
+        target = (0.0, 0.0, 0.0)
+    if up is None:
+        up = (0.0, 1.0, 0.0)
+    camera, target, up = _vk.broadcast_args_to_max_batch((camera, (3,)), (target, (3,)), (up, (3,)))
+    camera = camera.to(_internal.device())
+    target = target.to(_internal.device())
+    up = up.to(_internal.device())
+    camera_poses = _torch.cat([camera, vec3.normalize(target - camera), up], dim=-1)
+    return camera_poses
+
+
+
+
 
 # def ray_box_intersection(bmin: vec3, bmax: vec3):
 #     return RayBoxIntersection(box_min=bmin, box_max=bmax)

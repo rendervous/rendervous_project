@@ -1,40 +1,39 @@
-import vulky as vk
-import typing
-# from typing import Optional, List, Tuple, Callable, Dict, Any
-import os
-import torch
+import vulky as _vk
+import typing as _typing
+import os as _os
+import torch as _torch
 
 
-__MANUAL_SEED__ : typing.Optional[int] = None
-__SEEDS_TENSOR__ : typing.Optional[torch.Tensor] = None
+__MANUAL_SEED__ : _typing.Optional[int] = None
+__SEEDS_TENSOR__ : _typing.Optional[_torch.Tensor] = None
 
-__INCLUDE_PATH__ = os.path.dirname(__file__).replace('\\','/') + '/include'
-
-
-__TORCH_DEVICE__ = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')  #TODO: Check with AMD
+__INCLUDE_PATH__ = _os.path.dirname(__file__).replace('\\','/') + '/include'
 
 
-def device() -> torch.device:
+__TORCH_DEVICE__ = _torch.device('cuda:0') if _torch.cuda.is_available() else _torch.device('cpu')  #TODO: Check with AMD
+
+
+def device() -> _torch.device:
     return __TORCH_DEVICE__
 
 
-def seed(manual_seed: typing.Optional[int] = None):
+def seed(manual_seed: _typing.Optional[int] = None):
     global __MANUAL_SEED__
     __MANUAL_SEED__ = manual_seed
 
 
-def get_seeds() -> vk.ivec4:
+def get_seeds() -> _vk.ivec4:
     global __MANUAL_SEED__, __SEEDS_TENSOR__
     if __MANUAL_SEED__ is not None:
-        torch.manual_seed(__MANUAL_SEED__)
+        _torch.manual_seed(__MANUAL_SEED__)
         __MANUAL_SEED__ = None
     if __SEEDS_TENSOR__ is None:
-        __SEEDS_TENSOR__ = vk.ivec4(0, 0, 0, 0)
-    torch.randint(low=129, high=1 << 30, size=(4,), dtype=torch.int32, out=__SEEDS_TENSOR__)
+        __SEEDS_TENSOR__ = _vk.ivec4(0, 0, 0, 0)
+    _torch.randint(low=129, high=1 << 30, size=(4,), dtype=_torch.int32, out=__SEEDS_TENSOR__)
     return __SEEDS_TENSOR__
 
 
-class RendererModule(torch.nn.Module):
+class RendererModule(_torch.nn.Module):
     """
     Module that performs gradient-based operations on compute, graphics or raytracing pipelines.
     """
@@ -49,14 +48,14 @@ class RendererModule(torch.nn.Module):
         """
         pass
 
-    def _forward_render(self, input: typing.List[torch.Tensor], **kwargs) -> typing.List[torch.Tensor]:
+    def _forward_render(self, input: _typing.List[_torch.Tensor], **kwargs) -> _typing.List[_torch.Tensor]:
         """
         Computes the output given the parameters
         """
         pass
 
-    def _backward_render(self, input: typing.List[torch.Tensor],
-                        output_gradients: typing.List[typing.Optional[torch.Tensor]], **kwargs) -> typing.List[typing.Optional[torch.Tensor]]:
+    def _backward_render(self, input: _typing.List[_torch.Tensor],
+                        output_gradients: _typing.List[_typing.Optional[_torch.Tensor]], **kwargs) -> _typing.List[_typing.Optional[_torch.Tensor]]:
         """
         Computes the gradient of parameters given the original inputs and the gradients of outputs
         """
@@ -68,7 +67,7 @@ class RendererModule(torch.nn.Module):
         return outputs[0] if len(outputs) == 1 else outputs
 
 
-class _AutogradRendererFunction(torch.autograd.Function):
+class _AutogradRendererFunction(_torch.autograd.Function):
 
     @staticmethod
     def forward(ctx, *args):
@@ -77,7 +76,7 @@ class _AutogradRendererFunction(torch.autograd.Function):
         renderer = args[-1]
         kwargs = args[-2]
         inputs = args[0:-2]  # to skip renderer
-        tensor_mask = [isinstance(a, torch.Tensor) for a in inputs]
+        tensor_mask = [isinstance(a, _torch.Tensor) for a in inputs]
         only_tensors = [t if is_tensor else None for t, is_tensor in zip(inputs, tensor_mask)]
         only_non_tensors = [t if not is_tensor else None for t, is_tensor in zip(inputs, tensor_mask)]
         ctx.save_for_backward(*only_tensors)  # properly save tensors for backward
@@ -101,7 +100,7 @@ class _AutogradRendererFunction(torch.autograd.Function):
         grad_outputs = list(args)
         grad_inputs = renderer._backward_render(seed, inputs, grad_outputs, **kwargs)
         # print(f"[DEBUG] Backward grads from renderer {grad_inputs[0].mean()}")
-        # assert grad_inputs[0] is None or torch.isnan(grad_inputs[0]).sum() == 0, "error in generated grads."
+        # assert grad_inputs[0] is None or _torch.isnan(grad_inputs[0]).sum() == 0, "error in generated grads."
         return (*(None if g is None else g for g in grad_inputs),
                 None, None)  # append None to refer to renderer object passed in forward
 
@@ -113,28 +112,28 @@ class FunctionMeta(type):
         extension_info = dct['__extension_info__']
         if extension_info is not None:  # is not an abstract node
             extension_path = extension_info.get('path', None)
-            assert isinstance(extension_path, str) and os.path.isfile(extension_path), 'path must be a valid file path str'
+            assert isinstance(extension_path, str) and _os.path.isfile(extension_path), 'path must be a valid file path str'
             include_dirs = extension_info.get('include_dirs', [])
-            include_dirs.append(os.path.dirname(extension_path))
-            shader_path = vk.compile_shader_file(extension_path, include_dirs)
+            include_dirs.append(_os.path.dirname(extension_path))
+            shader_path = _vk.compile_shader_file(extension_path, include_dirs)
             parameters = extension_info.get('parameters', {})
             ext_class.rdv_group_size = extension_info.get('group_size', (1024, 1, 1))
             if parameters is None or len(parameters) == 0:
                 parameters = dict(foo=int)
-            parameters_layout = vk.Layout.from_description(mode=vk.LayoutAlignment.STD430, description=parameters)
-            ext_class.rdv_parameters_buffer = vk.object_buffer(layout=parameters_layout)
+            parameters_layout = _vk.Layout.from_description(mode=_vk.LayoutAlignment.STD430, description=parameters)
+            ext_class.rdv_parameters_buffer = _vk.object_buffer(layout=parameters_layout)
             ext_class.rdv_parameters_buffer_accessor = ext_class.rdv_parameters_buffer.accessor
-            ext_class.rdv_system_buffer = vk.object_buffer(layout=vk.Layout.from_structure(
-                vk.LayoutAlignment.STD430,
-                seeds = vk.ivec4,
+            ext_class.rdv_system_buffer = _vk.object_buffer(layout=_vk.Layout.from_structure(
+                _vk.LayoutAlignment.STD430,
+                seeds = _vk.ivec4,
                 dim_x = int,
                 dim_y = int,
                 dim_z = int
             ))
-            pipeline = vk.pipeline_compute()
+            pipeline = _vk.pipeline_compute()
             pipeline.load_shader(shader_path)
-            pipeline.layout(set=0, binding=0, system_buffer=vk.DescriptorType.UNIFORM_BUFFER)
-            pipeline.layout(set=0, binding=1, parameters_buffer=vk.DescriptorType.UNIFORM_BUFFER)
+            pipeline.layout(set=0, binding=0, system_buffer=_vk.DescriptorType.UNIFORM_BUFFER)
+            pipeline.layout(set=0, binding=1, parameters_buffer=_vk.DescriptorType.UNIFORM_BUFFER)
             pipeline.close()
             global_bindings = pipeline.create_descriptor_set_collection(set=0, count=1)
             global_bindings[0].update(
@@ -178,23 +177,23 @@ class FunctionBase(object, metaclass=FunctionMeta):
         instance = cls.instance()
         invocations = instance.bind(*args, **kwargs)
         man = instance._resolve_dispatcher(invocations)
-        vk.submit(man)
+        _vk.submit(man)
         return instance.result()
 
-    def bind(self, *args, **kwargs) -> typing.Tuple:
+    def bind(self, *args, **kwargs) -> _typing.Tuple:
         '''
         sets the arguments to the object and return the number of threads to dispatch
         '''
         raise NotImplementedError()
 
-    def result(self) -> typing.Any:
+    def result(self) -> _typing.Any:
         '''
         :param parameters: accessor to get bound tensors
         :return: resultant output, can be directly tensors or a postprocessing on them.
         '''
         raise NotImplementedError()
 
-    def _resolve_dispatcher(self, threads: typing.Tuple) -> vk.ComputeManager:
+    def _resolve_dispatcher(self, threads: _typing.Tuple) -> _vk.ComputeManager:
         dim_x, dim_y, dim_z = threads
         with self.rdv_system_buffer as b:
             b.seeds = get_seeds()
@@ -203,7 +202,7 @@ class FunctionBase(object, metaclass=FunctionMeta):
             b.dim_z = dim_z
 
         if threads not in self.rdv_man_cache:
-            man = vk.compute_manager()
+            man = _vk.compute_manager()
             man.set_pipeline(self.rdv_pipeline)
             man.bind(self.rdv_global_bindings[0])
             man.dispatch_threads(*threads, *self.rdv_group_size)
@@ -222,13 +221,13 @@ class DependentObject:
         raise NotImplementedError()
 
 
-class Reparameter(torch.nn.Parameter, DependentObject):
-    __torch_function__ = torch._C._disabled_torch_function_impl
+class Reparameter(_torch.nn.Parameter, DependentObject):
+    __torch_function__ = _torch._C._disabled_torch_function_impl
 
     def __init__(self, *args):
         super(Reparameter, self).__init__()
 
-    def initialize(self, forward_exp: typing.Callable[[], torch.Tensor]):
+    def initialize(self, forward_exp: _typing.Callable[[], _torch.Tensor]):
         self.forward_exp = forward_exp
         self.diff_tensor = None
         self.requires_grad = False
@@ -238,7 +237,7 @@ class Reparameter(torch.nn.Parameter, DependentObject):
         self.requires_grad = self.diff_tensor.requires_grad
         if self.grad is not None:
             self.grad.zero_()
-        with torch.no_grad():
+        with _torch.no_grad():
             self.copy_(self.diff_tensor)
 
     def backward_dependency(self):
@@ -246,7 +245,7 @@ class Reparameter(torch.nn.Parameter, DependentObject):
             self.diff_tensor.backward(self.grad)
 
     @staticmethod
-    def from_lambda(exp: typing.Callable[[], torch.Tensor]):
+    def from_lambda(exp: _typing.Callable[[], _torch.Tensor]):
         initial_value = exp()
         p = Reparameter(initial_value)
         p.initialize(exp)
@@ -278,7 +277,7 @@ class DependencySet(DependentObject):
 
     def add_parameters(self, **kwargs):
         for k, v in kwargs.items():
-            if not isinstance(v, torch.nn.Module) and hasattr(v, '__call__'):
+            if not isinstance(v, _torch.nn.Module) and hasattr(v, '__call__'):
                 v = Reparameter.from_lambda(v)
             if isinstance(v, DependentObject):
                 self._reparameters.append(v)
@@ -289,7 +288,7 @@ class DependencySet(DependentObject):
         if ds._parent is not None:
             self.copy_parameters(ds._parent)
 
-    def requires(self, builder: typing.Callable[['DependencySet', typing.Dict[str, typing.Any]], None], **kwargs):
+    def requires(self, builder: _typing.Callable[['DependencySet', _typing.Dict[str, _typing.Any]], None], **kwargs):
         builder(self, **kwargs)
 
     def _forward_dependency(self):
