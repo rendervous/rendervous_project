@@ -15,6 +15,7 @@ setup(
     install_requires=[
         "vulky @ git+https://github.com/rendervous/vulky_project.git"
     ],
+    include_package_data=True,
     extras_requires={
         "gui": [
             "pywin32; platform_system == 'Windows'",
