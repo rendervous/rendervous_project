@@ -13,7 +13,7 @@ setup(
     package_dir={"": "src"},  # Map the root package directory to "src"
     # packages=find_packages(),             # Automatically find packages in your project
     install_requires=[
-        "git+https://github.com/rendervous/vulky_project.git"
+        "vulky @ git+https://github.com/rendervous/vulky_project.git"
     ],
     extras_requires={
         "gui": [
