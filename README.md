@@ -29,4 +29,40 @@ As a result you have a differentiable renderer that can be included in learning 
     <a href="https://colab.research.google.com/github/rendervous/rendervous_project/blob/main/tutorials/e01_introducing_rendervous.ipynb">open in colab</a>
 </td>
 </tr>
+
+<tr> 
+<td>
+    <b>Differentiability:</b> Testing differentiability with simple regressions.<br/>
+    <a href="https://colab.research.google.com/github/rendervous/rendervous_project/blob/main/tutorials/e02_differentiability.ipynb">open in colab</a>
+</td>
+</tr>
+
+<tr> 
+<td>
+    <b>Simple MLP:</b> Chaining maps to build an MLP.<br/>
+    <a href="https://colab.research.google.com/github/rendervous/rendervous_project/blob/main/tutorials/e03_basic_mlp.ipynb">open in colab</a>
+</td>
+</tr>
+
+<tr> 
+<td>
+    <b>Sensors:</b> Examples of sensors.<br/>
+    <a href="https://colab.research.google.com/github/rendervous/rendervous_project/blob/main/tutorials/e04_sensors.ipynb">open in colab</a>
+</td>
+</tr>
+
+<tr> 
+<td>
+    <b>Transmittances:</b> Example of transmittance computation through a volume.<br/>
+    <a href="https://colab.research.google.com/github/rendervous/rendervous_project/blob/main/tutorials/e05_transmittances.ipynb">open in colab</a>
+</td>
+</tr>
+
+<tr> 
+<td>
+    <b>Reconstruction:</b> Example of volume reconstruction from transmittance.<br/>
+    <a href="https://colab.research.google.com/github/rendervous/rendervous_project/blob/main/tutorials/e06_reconstruction_from_transmittance.ipynb">open in colab</a>
+</td>
+</tr>
+
 </table> 
