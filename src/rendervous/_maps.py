@@ -1803,7 +1803,7 @@ class CompositionMap(MapBase):
     __extension_info__ = dict(
         parameters=dict(
             inner=MapBase,
-            outter=MapBase
+            outter=MapBase,
         ),
         bw_implementations=BACKWARD_IMPLEMENTATIONS.DEFAULT,
         path=_internal.__INCLUDE_PATH__ + '/maps/composition.h'
@@ -2056,7 +2056,6 @@ class ComposeSelectMap(MapBase):
     #             m = self.promote(output_dim)
 
 
-
 class InputSelectMap(MapBase):
     __extension_info__ = dict(
         parameters=dict(
@@ -2092,6 +2091,10 @@ class InputPromoteMap(MapBase):
 
 
 class ReluMap(ActivationMap):
+    # __extension_info__ = ActivationMap.create_info(
+    #     fw = "max(0, x)",
+    #     bw = "dL_dx = dL_dy * (x > 0) 1: 0"
+    # )
     __extension_info__ = dict(
         path=_internal.__INCLUDE_PATH__ + '/maps/f_relu.h',
         bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT
@@ -2109,6 +2112,120 @@ class CosMap(ActivationMap):
         path=_internal.__INCLUDE_PATH__ + '/maps/f_cos.h',
         bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT
     )
+
+
+class Sequential(MapBase):
+    """
+    Experimental: Dynamic maps slow down performance.
+    """
+    __extension_info__ = dict(
+        parameters=dict(
+            initial_map=MapBase,
+            final_map=MapBase,
+            # -1 means unbounded array, real value used will come from the initialization
+            # _torch.int64 is to represent a pointer (dynamic map), not a specific map (typed)
+            maps = [-1, _torch.int64]
+        ),
+        path=_internal.__INCLUDE_PATH__ + "/maps/sequential.h",
+        bw_implementations = BACKWARD_IMPLEMENTATIONS.NONE
+    )
+
+    def __init__(self, *maps: MapBase):
+        maps = list(maps)
+        assert len(maps) >= 3, "At least 3 maps are required. initial, intermediates and final."
+        intermediate_dim = None
+        for i, m in enumerate(maps):
+            if i == 0:
+                intermediate_dim = m.output_dim
+            elif i == len(maps) - 1:
+                intermediate_dim = m.input_dim if m.input_dim is not None else intermediate_dim
+            else:
+                intermediate_dim = m.input_dim if m.input_dim is not None else intermediate_dim
+                intermediate_dim = m.output_dim if m.output_dim is not None else intermediate_dim
+        if intermediate_dim is not None:
+            for i in range(len(maps)):
+                if i == 0:
+                    maps[i] = maps[i].cast(output_dim=intermediate_dim)
+                elif i == len(maps)-1:
+                    maps[i] = maps[i].cast(input_dim=intermediate_dim)
+                else:
+                    maps[i] = maps[i].cast(input_dim=intermediate_dim, output_dim=intermediate_dim)
+        input_dim = maps[0].input_dim
+        output_dim = maps[-1].output_dim
+        assert all(m.input_dim == intermediate_dim and m.output_dim == intermediate_dim for m in maps[1:-1])
+        dims = {}
+        if input_dim is not None:
+            dims.update(INPUT_DIM=input_dim)
+        if output_dim is not None:
+            dims.update(OUTPUT_DIM=output_dim)
+        if intermediate_dim is not None:
+            dims.update(INTERMEDIATE_DIM=intermediate_dim)
+        number_of_maps = len(maps) - 2
+        dims.update(NUMBER_OF_MAPS=number_of_maps)
+        super().__init__(
+            len(maps)-2,  # *args with single argument will be used to fill the size of unbounded arrays
+            **dims,  # generics
+        )
+        self.initial_map = maps[0]
+        self.final_map = maps[-1]
+        for i in range(1, len(maps)-1):
+            self.maps[i-1] = maps[i].__bindable__.device_ptr  # dynamic maps
+
+        self.map_objects = maps  # used to cast
+        if intermediate_dim is not None:
+            self.dynamic_requires = [(intermediate_dim, intermediate_dim)]
+
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
+        if self.input_dim == input_dim and self.output_dim == output_dim:
+            return self  # no cast necessary
+        maps = self.map_objects
+        maps[0] = maps[0].cast(input_dim=input_dim)
+        maps[-1] = maps[-1].cast(output_dim=output_dim)
+        return Sequential(*maps)
+
+
+# class CompiledMap(MapBase):
+#
+#     __extension_info__ = None
+#
+#     @staticmethod
+#     def build_extension_info(cls) -> dict:
+#         pass
+#
+# class MLP(CompiledMap):
+#     @classmethod
+#     def build_extension_info(cls) -> dict:
+#         pass
+#
+#     __extension_info__ = CompiledMap.build_extension_info(MLP)
+
+
+# class CompiledMap(MapBase):
+#     __extension_info__ = dict(
+#
+#     )
+#
+#     @classmethod
+#     def
+
+
+
+
+
+# def build_custom_map(
+#     code: str,
+#     bw_implementations: BACKWARD_IMPLEMENTATIONS,
+#     **parameters
+# ):
+#     class CustomMap(MapBase):
+#         __extension_info__ = dict(
+#             parameters=parameters,
+#             code=code,
+#             bw_implementations=bw_implementations
+#         )
+#     return CustomMap
+#
+# mlp_type = build_custom_map(mlp_dsl.build(), )
 
 
 # Sensors
