@@ -70,6 +70,17 @@ class DispatcherEngine:
         return code
 
     @classmethod
+    def create_support_code(cls):
+        # Gets vulkan device used
+        caps = _vk.support()
+        code = ""
+        if caps.ray_query:
+            code += "#define SUPPORTED_RAY_QUERY\n"
+        if caps.atom_float:
+            code += "#define SUPPORTED_FLOAT_ATOM_ADD\n"
+        return code
+
+    @classmethod
     def create_code_for_struct_declaration(cls, type_definition) -> _typing.Tuple[
         str, dict, list]:  # Code, new structures, sizes
         if type_definition == MapBase:
@@ -358,7 +369,7 @@ void backward (map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DI
 #version 460
 #extension GL_GOOGLE_include_directive : require
 #extension GL_EXT_debug_printf : enable
-
+""" + cls.create_support_code() + """
 #include "common.h"
 
 layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
@@ -433,7 +444,7 @@ void main()
     #version 460
     #extension GL_GOOGLE_include_directive : require
     #extension GL_EXT_debug_printf : enable
-    
+    """ + cls.create_support_code() + """
     #include "common.h"
     layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
     
@@ -516,7 +527,7 @@ void main()
         #version 460
         #extension GL_GOOGLE_include_directive : require
         #extension GL_EXT_debug_printf : enable
-        
+        """ + cls.create_support_code() + """
         #include "common.h"
         layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
         
@@ -643,7 +654,7 @@ void main()
         #version 460
         #extension GL_GOOGLE_include_directive : require
         #extension GL_EXT_debug_printf : enable
-        
+        """ + cls.create_support_code() + """
         #include "common.h"
         layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
         
