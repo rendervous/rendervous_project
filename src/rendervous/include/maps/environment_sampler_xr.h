@@ -10,13 +10,13 @@ void environment_sampler(map_object, vec3 x, out vec3 w, out vec3 E, out float p
     vec2 p0 = vec2(0,0);
     vec2 p1 = vec2(1,1);
     float prob = 1;
-    [[unroll]]
+    /*[[unroll]]*/
     for (int i=0; i<parameters.levels; i++)
     {
         int offset = current_node * 4;
         int selected_child = 3;
         prob = densities_buf.data[offset + 3];
-        [[unroll]]
+        /*[[unroll]]*/
         for (int c = 0; c < 3; c ++)
             if (sel < densities_buf.data[offset + c])
             {
@@ -54,13 +54,13 @@ void environment_sampler_bw(map_object, vec3 x, vec3 out_w, vec3 out_E, vec3 dL_
     vec2 p0 = vec2(0,0);
     vec2 p1 = vec2(1,1);
     float prob = 1;
-    [[unroll]]
+    /*[[unroll]]*/
     for (int i=0; i<parameters.levels; i++)
     {
         int offset = current_node * 4;
         int selected_child = 3;
         prob = densities_buf.data[offset + 3];
-        [[unroll]]
+        /*[[unroll]]*/
         for (int c = 0; c < 3; c ++)
             if (sel < densities_buf.data[offset + c])
             {

@@ -185,7 +185,7 @@ class DispatcherEngine:
                 """
         return f"""
 void dynamic_forward (map_object, GPUPtr dynamic_map, in float _input[{input_dim}], out float _output[{output_dim}]) {{
-    [[unroll]] for (int i=0; i<{output_dim}; i++) _output[i] = 0.0;//((i^13+15 + int(random()*17))%{output_dim})/float({output_dim});
+    for (int i=0; i<{output_dim}; i++) _output[i] = 0.0;//((i^13+15 + int(random()*17))%{output_dim})/float({output_dim});
     if (dynamic_map == 0) {{
         return;
     }}
@@ -250,13 +250,13 @@ struct {codename} {{ buffer_{codename} data; }};
         if map.bw_implementations == BACKWARD_IMPLEMENTATIONS.NONE:
             # Add default implementation for both bw modes
             code += """
-            void backward (map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {  }
-            void backward (map_object, float _input[INPUT_DIM], float _output[OUTPUT_DIM], float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {  }
+            void backward (map_object, in float _input[INPUT_DIM], in float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {  }
+            void backward (map_object, in float _input[INPUT_DIM], in float _output[OUTPUT_DIM], in float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {  }
             """
         elif map.bw_implementations == BACKWARD_IMPLEMENTATIONS.WITH_OUTPUT:
             # If only default implementation is provided, add an implementation of bw based on bw using output, re-computing the output
             code += """
-            void backward (map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {
+            void backward (map_object, in float _input[INPUT_DIM], in float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {
                 float _output[OUTPUT_DIM];
                 SAVE_SEED(before_fw)
                 forward(object, _input, _output);
@@ -267,14 +267,14 @@ struct {codename} {{ buffer_{codename} data; }};
         elif map.bw_implementations == BACKWARD_IMPLEMENTATIONS.DEFAULT:
             # add an implementation of a bw using output, ignoring the output
             code += """
-            void backward (map_object, float _input[INPUT_DIM], float _output[OUTPUT_DIM], float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {
+            void backward (map_object, in float _input[INPUT_DIM], in float _output[OUTPUT_DIM], in float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM]) {
                 backward(object, _input, _output_grad, _input_grad);  
             }
             """
 
         # Add a reduced overload to omit input grad propagation
         code += """
-void backward (map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DIM]) {
+void backward (map_object, in float _input[INPUT_DIM], in float _output_grad[OUTPUT_DIM]) {
     float _input_grad[INPUT_DIM];
     backward(object, _input, _output_grad, _input_grad);  
 }
@@ -572,7 +572,6 @@ void main()
 
             if (sensors_ptr == 0) {{
                 int current_index_component = index;
-                [[unroll]]
                 for (int i={capture_object.input_dim} - 1; i>=0; i--)
                 {{
                     int d = sensor_shape[i];
@@ -583,7 +582,6 @@ void main()
             else
             {{
                 int_ptr sensors_buf = int_ptr(sensors_ptr + 8 * {capture_object.input_dim} * index);
-                [[unroll]]
                 for (int i=0; i<{capture_object.input_dim}; i++)
                     indices[i] = intBitsToFloat(sensors_buf.data[i*2]);
             }}
@@ -599,7 +597,6 @@ void main()
             else {{
                 int output_dim = {field.output_dim};
                 rdv_output_data output_buf = rdv_output_data(output_tensor_ptr + index * output_dim * 4);
-                [[unroll]]
                 for (int i=0; i<output_dim; i++)
                     output_buf.data[i] = 0.0;
                 for (int s = 0; s < samples; s ++)
@@ -608,11 +605,9 @@ void main()
                     forward(capture_object, indices, sensor_position);
                     float temp_output [{field.output_dim}];
                     forward(main_map, sensor_position, temp_output);
-                    [[unroll]]
                     for (int i=0; i<output_dim; i++)
                         output_buf.data[i] += temp_output[i];
                 }}
-                [[unroll]]
                 for (int i=0; i<output_dim; i++)
                     output_buf.data[i] /= samples;
             }}
@@ -696,7 +691,6 @@ void main()
             float indices[{capture_object.input_dim}];
             if (sensors_ptr == 0) {{
                 int current_index_component = index;
-                [[unroll]]
                 for (int i={capture_object.input_dim} - 1; i>=0; i--)
                 {{
                     int d = sensor_shape[i];
@@ -707,22 +701,20 @@ void main()
             else
             {{
                 int_ptr sensors_buf = int_ptr(sensors_ptr + 8 * {capture_object.input_dim} * index);
-                [[unroll]]
                 for (int i=0; i<{capture_object.input_dim}; i++)
                     indices[i] = intBitsToFloat(sensors_buf.data[i*2]);
             }}
 
             float dL_dp [{field.input_dim}];
-            [[unroll]] for (int i = 0; i < {field.input_dim}; i++) dL_dp[i] = 0.0;
+            for (int i = 0; i < {field.input_dim}; i++) dL_dp[i] = 0.0;
             
             int output_dim = {field.output_dim};
             rdv_output_data output_grad_buf = rdv_output_data(output_grad_tensor_ptr + index * output_dim * 4);
             float output_grad[{field.output_dim}];
-            [[unroll]] for (int i=0; i< {field.output_dim}; i++) output_grad[i] = output_grad_buf.data[i] / samples;
+            for (int i=0; i< {field.output_dim}; i++) output_grad[i] = output_grad_buf.data[i] / samples;
             
             float sensor_position[{field.input_dim}];
 
-            [[unroll]]
             for (int s = 0; s < samples; s++)
             {{
                 forward(capture_object, indices, sensor_position);
@@ -1116,7 +1108,7 @@ class MapMeta(type):
                     return {'__name__': p.get('__name__'), ** {k: from_type_2_layout_description(v, dynamic_array_size) for k, v in p.items() if k != '__name__'}}
                 return p
 
-            parameters = {'rdv_map_id': int, 'rdv_map_pad0': int, **parameters}
+            parameters = {'rdv_map_id': int, 'rdv_map_pad0': int, 'rdv_map_pad1': int, 'rdv_map_pad2': int, **parameters}
             parameters_layout = lambda s: _vk.Layout.from_description(_vk.LayoutAlignment.SCALAR, description=from_type_2_layout_description(parameters, s))
             ext_class.default_generics = extension_generics
             ext_class.dynamic_requires = extension_dynamic_requires
@@ -1357,6 +1349,8 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
         return CompositionMap(prev_map, self)
 
     def then(self, next_map: 'MapBase') -> 'MapBase':
+        if isinstance(self, Identity):
+            return next_map
         if isinstance(next_map, Identity):
             return self
         if isinstance(next_map, InputPromoteMap):
@@ -1591,7 +1585,7 @@ class MixturePDF(MapBase):
 FORWARD {{
     float alpha[1];
     float _condition[CONDITION_DIM];
-    [[unroll]] for (int i=0; i<CONDITION_DIM; i++)
+    for (int i=0; i<CONDITION_DIM; i++)
         _condition[i] = _input[i];
     forward(parameters.alpha, _condition, alpha);
     float _pdf_a[1];
@@ -2005,6 +1999,13 @@ class ConcatMap(MapBase):
     )
 
     def __init__(self, map_a: MapBase, map_b: MapBase):
+        input_dim = None
+        if map_a.input_dim is not None and map_b.input_dim is None:
+            map_b = map_b.cast(input_dim = map_a.input_dim)
+
+        if map_b.input_dim is not None and map_a.input_dim is None:
+            map_a = map_a.cast(input_dim= map_b.input_dim)
+
         assert map_a.input_dim == map_b.input_dim
         super(ConcatMap, self).__init__(
             INPUT_DIM=map_a.input_dim,
@@ -2125,74 +2126,74 @@ class CosMap(ActivationMap):
     )
 
 
-class Sequential(MapBase):
-    """
-    Experimental: Dynamic maps slow down performance.
-    """
-    __extension_info__ = dict(
-        parameters=dict(
-            initial_map=MapBase,
-            final_map=MapBase,
-            # -1 means unbounded array, real value used will come from the initialization
-            # _torch.int64 is to represent a pointer (dynamic map), not a specific map (typed)
-            maps = [-1, _torch.int64]
-        ),
-        path=_internal.__INCLUDE_PATH__ + "/maps/sequential.h",
-        bw_implementations = BACKWARD_IMPLEMENTATIONS.NONE
-    )
-
-    def __init__(self, *maps: MapBase):
-        maps = list(maps)
-        assert len(maps) >= 3, "At least 3 maps are required. initial, intermediates and final."
-        intermediate_dim = None
-        for i, m in enumerate(maps):
-            if i == 0:
-                intermediate_dim = m.output_dim
-            elif i == len(maps) - 1:
-                intermediate_dim = m.input_dim if m.input_dim is not None else intermediate_dim
-            else:
-                intermediate_dim = m.input_dim if m.input_dim is not None else intermediate_dim
-                intermediate_dim = m.output_dim if m.output_dim is not None else intermediate_dim
-        if intermediate_dim is not None:
-            for i in range(len(maps)):
-                if i == 0:
-                    maps[i] = maps[i].cast(output_dim=intermediate_dim)
-                elif i == len(maps)-1:
-                    maps[i] = maps[i].cast(input_dim=intermediate_dim)
-                else:
-                    maps[i] = maps[i].cast(input_dim=intermediate_dim, output_dim=intermediate_dim)
-        input_dim = maps[0].input_dim
-        output_dim = maps[-1].output_dim
-        assert all(m.input_dim == intermediate_dim and m.output_dim == intermediate_dim for m in maps[1:-1])
-        dims = {}
-        if input_dim is not None:
-            dims.update(INPUT_DIM=input_dim)
-        if output_dim is not None:
-            dims.update(OUTPUT_DIM=output_dim)
-        if intermediate_dim is not None:
-            dims.update(INTERMEDIATE_DIM=intermediate_dim)
-        number_of_maps = len(maps) - 2
-        dims.update(NUMBER_OF_MAPS=number_of_maps)
-        super().__init__(
-            len(maps)-2,  # *args with single argument will be used to fill the size of unbounded arrays
-            **dims,  # generics
-        )
-        self.initial_map = maps[0]
-        self.final_map = maps[-1]
-        for i in range(1, len(maps)-1):
-            self.maps[i-1] = maps[i].__bindable__.device_ptr  # dynamic maps
-
-        self.map_objects = maps  # used to cast
-        if intermediate_dim is not None:
-            self.dynamic_requires = [(intermediate_dim, intermediate_dim)]
-
-    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
-        if self.input_dim == input_dim and self.output_dim == output_dim:
-            return self  # no cast necessary
-        maps = self.map_objects
-        maps[0] = maps[0].cast(input_dim=input_dim)
-        maps[-1] = maps[-1].cast(output_dim=output_dim)
-        return Sequential(*maps)
+# class Sequential(MapBase):
+#     """
+#     Experimental: Dynamic maps slow down performance.
+#     """
+#     __extension_info__ = dict(
+#         parameters=dict(
+#             initial_map=MapBase,
+#             final_map=MapBase,
+#             # -1 means unbounded array, real value used will come from the initialization
+#             # _torch.int64 is to represent a pointer (dynamic map), not a specific map (typed)
+#             maps = [-1, _torch.int64]
+#         ),
+#         path=_internal.__INCLUDE_PATH__ + "/maps/sequential.h",
+#         bw_implementations = BACKWARD_IMPLEMENTATIONS.NONE
+#     )
+#
+#     def __init__(self, *maps: MapBase):
+#         maps = list(maps)
+#         assert len(maps) >= 3, "At least 3 maps are required. initial, intermediates and final."
+#         intermediate_dim = None
+#         for i, m in enumerate(maps):
+#             if i == 0:
+#                 intermediate_dim = m.output_dim
+#             elif i == len(maps) - 1:
+#                 intermediate_dim = m.input_dim if m.input_dim is not None else intermediate_dim
+#             else:
+#                 intermediate_dim = m.input_dim if m.input_dim is not None else intermediate_dim
+#                 intermediate_dim = m.output_dim if m.output_dim is not None else intermediate_dim
+#         if intermediate_dim is not None:
+#             for i in range(len(maps)):
+#                 if i == 0:
+#                     maps[i] = maps[i].cast(output_dim=intermediate_dim)
+#                 elif i == len(maps)-1:
+#                     maps[i] = maps[i].cast(input_dim=intermediate_dim)
+#                 else:
+#                     maps[i] = maps[i].cast(input_dim=intermediate_dim, output_dim=intermediate_dim)
+#         input_dim = maps[0].input_dim
+#         output_dim = maps[-1].output_dim
+#         assert all(m.input_dim == intermediate_dim and m.output_dim == intermediate_dim for m in maps[1:-1])
+#         dims = {}
+#         if input_dim is not None:
+#             dims.update(INPUT_DIM=input_dim)
+#         if output_dim is not None:
+#             dims.update(OUTPUT_DIM=output_dim)
+#         if intermediate_dim is not None:
+#             dims.update(INTERMEDIATE_DIM=intermediate_dim)
+#         number_of_maps = len(maps) - 2
+#         dims.update(NUMBER_OF_MAPS=number_of_maps)
+#         super().__init__(
+#             len(maps)-2,  # *args with single argument will be used to fill the size of unbounded arrays
+#             **dims,  # generics
+#         )
+#         self.initial_map = maps[0]
+#         self.final_map = maps[-1]
+#         for i in range(1, len(maps)-1):
+#             self.maps[i-1] = maps[i].__bindable__.device_ptr  # dynamic maps
+#
+#         self.map_objects = maps  # used to cast
+#         if intermediate_dim is not None:
+#             self.dynamic_requires = [(intermediate_dim, intermediate_dim)]
+#
+#     def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
+#         if self.input_dim == input_dim and self.output_dim == output_dim:
+#             return self  # no cast necessary
+#         maps = self.map_objects
+#         maps[0] = maps[0].cast(input_dim=input_dim)
+#         maps[-1] = maps[-1].cast(output_dim=output_dim)
+#         return Sequential(*maps)
 
 
 # class CompiledMap(MapBase):
@@ -2377,7 +2378,6 @@ class DummyExample(MapBase):
         ),
         code="""
 FORWARD {
-    [[unroll]]
     for (int i=0; i<INPUT_DIM; i++)
         _output[i] = (_input[i] * parameters.alpha + _input[i]) * parameters.alpha;
 }               
@@ -2461,7 +2461,9 @@ class Grid3D(MapBase):
         parameters=dict(
             grid=ParameterDescriptor,
             bmin=vec3,
-            inv_bsize=vec3
+            pad0=float,
+            inv_bsize=vec3,
+            pad1=float
         ),
         bw_implementations=BACKWARD_IMPLEMENTATIONS.DEFAULT,
         path=_internal.__INCLUDE_PATH__ + '/maps/grid3d.h'
@@ -2646,13 +2648,11 @@ class XRQuadtreeRandomDirection(MapBase):
         vec2 p0 = vec2(0,0);
         vec2 p1 = vec2(1,1);
         float prob = 1;
-        [[unroll]]
         for (int i=0; i<parameters.levels; i++)
         {
             int offset = current_node * 4;
             int selected_child = 3;
             prob = densities_buf.data[offset + 3];
-            [[unroll]]
             for (int c = 0; c < 3; c ++)
                 if (sel < densities_buf.data[offset + c])
                 {
@@ -2702,13 +2702,12 @@ FORWARD
     forward(parameters.point_sampler, _input, x_wx);
     
     float function_in[FUNCTION_INPUT_DIM];
-    [[unroll]]
     for (int i=0; i<FUNCTION_INPUT_DIM; i++) function_in[i] = x_wx[i];
     float wx = x_wx[FUNCTION_INPUT_DIM];
     float function_out[FUNCTION_OUTPUT_DIM];
     forward(parameters.function_map, function_in, function_out);
-    [[unroll]] for (int i = 0; i<FUNCTION_OUTPUT_DIM; i++) _output[i] = function_out[i] * wx;
-    [[unroll]] for (int i = 0; i<FUNCTION_INPUT_DIM; i++) _output[i + FUNCTION_OUTPUT_DIM] = function_in[i];
+    for (int i = 0; i<FUNCTION_OUTPUT_DIM; i++) _output[i] = function_out[i] * wx;
+    for (int i = 0; i<FUNCTION_INPUT_DIM; i++) _output[i + FUNCTION_OUTPUT_DIM] = function_in[i];
 }
         """,
     )
@@ -2845,8 +2844,8 @@ class RaymarchingTransmittance(MapBase):
 
     def __init__(self, sigma: MapBase, boundary: MapBase, step: float = 0.005):
         super(RaymarchingTransmittance, self).__init__()
-        self.sigma = sigma
-        self.boundary = boundary
+        self.sigma = sigma.cast(3, 1)
+        self.boundary = boundary.cast(6, 2)
         self.step = step
 
 
@@ -3311,7 +3310,6 @@ class RayDirection(MapBase):
         code = """
 FORWARD
 {
-    [[unroll]]
     for (int i=0; i<3; i++)
         _output[i] = _input[3 + i];
 }
@@ -3337,7 +3335,6 @@ class RayPosition(MapBase):
         code = """
 FORWARD
 {
-    [[unroll]]
     for (int i=0; i<3; i++)
         _output[i] = _input[i];
 }
@@ -3364,12 +3361,10 @@ class RayToSegment(MapBase):
         code="""
     FORWARD
     {
-        [[unroll]]
         for (int i=0; i<3; i++)
             _output[i] = _input[i]; // x0 = x
         float d[1];
         forward(parameters.distance_field, _input, d);
-        [[unroll]]
         for (int i=0; i<3; i++)
             _output[i+3] = _input[i+3]*d[0] + _input[i]; // x1 = x + w*d
     }
@@ -3400,33 +3395,27 @@ class LineIntegrator(MapBase):
 FORWARD
 {
     float x0[INPUT_DIM/2];
-    [[unroll]]
     for (int i = 0; i < INPUT_DIM/2; i++)
         x0[i] = _input[i];
     float dx[INPUT_DIM/2];
     float d = 0.0;
-    [[unroll]]
     for (int i = 0; i < INPUT_DIM/2; i++)
     {
         dx[i] = _input[INPUT_DIM/2 + i] - x0[i];
         d += dx[i] * dx[i];
     }
     d = sqrt(d);
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
         _output[i] = 0.0;
     int samples = int(d / (parameters.step + 0.00000001)) + 1;
-    [[unroll]]
     for (int s = 0; s < samples; s++)
     {
         float xt[INPUT_DIM / 2];
         float alpha = random();
-        [[unroll]]
         for (int i=0; i<INPUT_DIM/2; i++)
             xt[i] = dx[i] * alpha + x0[i];
         float o[OUTPUT_DIM];
         forward(parameters.map, xt, o);
-        [[unroll]]
         for (int i=0; i<OUTPUT_DIM; i++)
             _output[i] += o[i];
     }
@@ -3532,7 +3521,6 @@ class TotalVariation(MapBase):
     {
         float w[INPUT_DIM];
         float dx = 0;
-        [[unroll]]
         for (int i=0; i<INPUT_DIM; i++)
         {
             w[i] = gauss() * parameters.expected_dx;
@@ -3546,7 +3534,6 @@ class TotalVariation(MapBase):
         forward(parameters.map, _input, _output); // eval map at current pos
         float adj_output[OUTPUT_DIM];
         forward(parameters.map, w, adj_output);
-        [[unroll]]
         for (int i = 0; i < OUTPUT_DIM; i++)
             _output[i] = abs(adj_output[i] - _output[i]) / dx;
     }
@@ -3555,7 +3542,6 @@ class TotalVariation(MapBase):
     {
         float w[INPUT_DIM];
         float dx = 0;
-        [[unroll]]
         for (int i=0; i<INPUT_DIM; i++)
         {
             w[i] = gauss() * parameters.expected_dx;
@@ -3572,11 +3558,9 @@ class TotalVariation(MapBase):
         forward(parameters.map, w, adj_output);
 
         float tmp_output_grad[OUTPUT_DIM];
-        [[unroll]]
         for (int i = 0; i < OUTPUT_DIM; i++)
             tmp_output_grad[i] = sign(adj_output[i] - _output[i]) * _output_grad[i] / dx;
         backward(parameters.map, w, tmp_output_grad, _input_grad);
-        [[unroll]]
         for (int i = 0; i < OUTPUT_DIM; i++)
             tmp_output_grad[i] = -tmp_output_grad[i];
         backward(parameters.map, _input, tmp_output_grad, _input_grad);
@@ -3638,7 +3622,6 @@ void load_tensor_at(map_object, ivec3 cell, out float[OUTPUT_DIM] values)
     cell = clamp(cell, ivec3(0), dim - ivec3(1));
 
     float_ptr buf = param_buffer(parameters.grid, cell);
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
         values[i] = buf.data[i]; 
 }
@@ -3652,7 +3635,6 @@ void add_grad_tensor_at(map_object, ivec3 cell, float[OUTPUT_DIM] values)
     //return;
     
     float_ptr buf = param_grad_buffer(parameters.grid, cell);
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
         atomicAdd_f(buf, i, values[i]);
 }
@@ -3660,22 +3642,16 @@ void add_grad_tensor_at(map_object, ivec3 cell, float[OUTPUT_DIM] values)
 
 void load_cell(map_object, ivec3 cell, out float[2][2][2][OUTPUT_DIM] values)
 {
-    [[unroll]]
     for (int dz = 0; dz < 2; dz ++)
-        [[unroll]]
         for (int dy = 0; dy < 2; dy ++)
-            [[unroll]]
             for (int dx = 0; dx < 2; dx ++) 
                 load_tensor_at(object, cell + ivec3(dx, dy, dz), values[dz][dy][dx]);
 }
 
 void add_grad_cell(map_object, ivec3 cell, float[2][2][2][OUTPUT_DIM] values)
 {
-    [[unroll]]
     for (int dz = 0; dz < 2; dz ++)
-        [[unroll]]
         for (int dy = 0; dy < 2; dy ++)
-            [[unroll]]
             for (int dx = 0; dx < 2; dx ++) 
                 add_grad_tensor_at(object, cell + ivec3(dx, dy, dz), values[dz][dy][dx]);
 }
@@ -3697,7 +3673,6 @@ void add_cell_integral(map_object, float[2][2][2][OUTPUT_DIM] cell, vec3 nx0, ve
     float alphas[2][2][2];
     get_alphas(object, nx0, nx1, alphas);
 
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
         _output[i] += dt * (
             cell[0][0][0][i] * alphas[0][0][0] + 
@@ -3717,7 +3692,6 @@ void add_cell_dL_dI(map_object, ivec3 cell, float[OUTPUT_DIM] dL_dI, vec3 nx0, v
 
     float grads_cell[2][2][2][OUTPUT_DIM];
 
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
     {
         float dtdLdI = dt * dL_dI[i];
@@ -3736,7 +3710,6 @@ void add_cell_dL_dI(map_object, ivec3 cell, float[OUTPUT_DIM] dL_dI, vec3 nx0, v
 
 FORWARD
 {
-    [[unroll]]
     for (int i=0; i < OUTPUT_DIM; i++)
         _output[i] = 0.0;
     vec3 x = vec3(_input[0], _input[1], _input[2]);
@@ -3864,11 +3837,8 @@ float sigma_at(map_object, ivec3 cell)
 
 void load_cell(map_object, ivec3 cell, out float[2][2][2] sigmas)
 {
-    [[unroll]]
     for (int dz = 0; dz < 2; dz ++)
-        [[unroll]]
         for (int dy = 0; dy < 2; dy ++)
-            [[unroll]]
             for (int dx = 0; dx < 2; dx ++) 
                 sigmas[dz][dy][dx] = sigma_at(object, cell + ivec3(dx, dy, dz));
 }
@@ -3885,7 +3855,6 @@ float interpolated_sigma(map_object, vec3 alpha, float[2][2][2] sigmas)
 
 FORWARD
 {
-    [[unroll]]
     for (int i=0; i < OUTPUT_DIM; i++)
         _output[i] = 0.0;
     vec3 x = vec3(_input[0], _input[1], _input[2]);
@@ -3929,7 +3898,6 @@ FORWARD
             if (emission_integral > 0.0001){
                 vec3 xc = cell_t*w + x;
                 forward(parameters.out_radiance, float[6](xc.x, xc.y, xc.z, w.x, w.y, w.z), radiance_values);
-                [[unroll]]
                 for (int i=0; i<OUTPUT_DIM; i++)
                     _output[i] += T * emission_integral * radiance_values[i];
             }
@@ -3949,7 +3917,6 @@ FORWARD
         x += w * d;
     }
     forward(parameters.boundary_radiance, float[6](x.x, x.y, x.z, w.x, w.y, w.z), radiance_values);
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
         _output[i] += T * radiance_values[i];
 }
@@ -3991,11 +3958,8 @@ float sigma_at(map_object, ivec3 cell)
 
 void load_cell(map_object, ivec3 cell, out float[2][2][2] sigmas)
 {
-    [[unroll]]
     for (int dz = 0; dz < 2; dz ++)
-        [[unroll]]
         for (int dy = 0; dy < 2; dy ++)
-            [[unroll]]
             for (int dx = 0; dx < 2; dx ++) 
                 sigmas[dz][dy][dx] = sigma_at(object, cell + ivec3(dx, dy, dz));
 }
@@ -4012,7 +3976,6 @@ float interpolated_sigma(map_object, vec3 alpha, float[2][2][2] sigmas)
 
 FORWARD
 {
-    [[unroll]]
     for (int i=0; i < OUTPUT_DIM; i++)
         _output[i] = 0.0;
     vec3 x = vec3(_input[0], _input[1], _input[2]);
@@ -4067,7 +4030,6 @@ FORWARD
                 float Pc = min(1.0, sigma_value / majorant);
                 vec3 xc = cell_t*w + x;
                 forward(parameters.out_radiance, float[6](xc.x, xc.y, xc.z, w.x, w.y, w.z), radiance_values);
-                [[unroll]]
                 for (int i=0; i<OUTPUT_DIM; i++)
                     _output[i] += T * Pc * radiance_values[i];
                 T *= (1 - Pc);
@@ -4088,7 +4050,6 @@ FORWARD
         x += w * d;
     }
     forward(parameters.boundary_radiance, float[6](x.x, x.y, x.z, w.x, w.y, w.z), radiance_values);
-    [[unroll]]
     for (int i=0; i<OUTPUT_DIM; i++)
         _output[i] += T * radiance_values[i];
 }
@@ -4179,7 +4140,6 @@ class TransmittanceDDA(MapBase):
 
     FORWARD
     {
-        [[unroll]]
         for (int i=0; i < OUTPUT_DIM; i++)
             _output[i] = 0.0;
         vec3 x = vec3(_input[0], _input[1], _input[2]);
@@ -4218,11 +4178,9 @@ class SH_PDF(MapBase):
         float c[SH_DIM * OUTPUT_DIM];
         forward(parameters.coefficients, float[3](_input[0], _input[1], _input[2]), c);
         
-        [[unroll]]
         for (int i=0; i<OUTPUT_DIM; i++)
         {
             _output[i] = 0.0;
-            [[unroll]]
             for (int j=0; j<SH_DIM; j++)
                 _output[i] += Y[j] * c[i*SH_DIM + j];
             _output[i] = max(_output[i], 0.001);
@@ -4237,10 +4195,8 @@ class SH_PDF(MapBase):
         eval_sh(vec3(_input[3], _input[4], _input[5]), Y);
         
         float dL_dc[SH_DIM * OUTPUT_DIM];
-        [[unroll]]
         for (int i=0; i<OUTPUT_DIM; i++)
         {
-            [[unroll]]
             for (int j=0; j<SH_DIM; j++)
                 dL_dc[i*SH_DIM + j] = _output_grad[i] * Y[j];
         }
@@ -4248,7 +4204,6 @@ class SH_PDF(MapBase):
         float dL_dx[3];
         backward(parameters.coefficients, float[3](_input[0], _input[1], _input[2]), dL_dc, dL_dx);
         
-        [[unroll]]
         for (int i=0; i<3; i++)
             _input_grad[i] += dL_dx[i];
     }
@@ -4271,8 +4226,8 @@ class RayBoxIntersection(MapBase):
             OUTPUT_DIM=2
         ),
         parameters=dict(
-            box_min=vec3,
-            box_max=vec3
+            box_min=vec3, pad0=float,
+            box_max=vec3, pad1=float
         ),
         code="""
 FORWARD
@@ -4424,7 +4379,7 @@ void volume_radiance_bw(map_object, vec3 x, vec3 w, vec3 dL_dR) {
 #             if (random() < sigma(object, x) / majorant)
 #             {
 #                 out_radiance(object, x, -w, adding_radiance);
-#                 [[unroll]] for (int i=0; i<OUTPUT_DIM; i++)
+#                 for (int i=0; i<OUTPUT_DIM; i++)
 #                     _output[i] = adding_radiance[i];
 #                 return;
 #             }
@@ -4433,7 +4388,7 @@ void volume_radiance_bw(map_object, vec3 x, vec3 w, vec3 dL_dR) {
 #         }
 #     }
 #     boundary_radiance(object, x, w, adding_radiance);
-#     [[unroll]] for (int i=0; i<OUTPUT_DIM; i++)
+#     for (int i=0; i<OUTPUT_DIM; i++)
 #         _output[i] = adding_radiance[i];
 # }
 #         """, nodiff=True
@@ -4682,7 +4637,7 @@ def map_to_generic(map_name: str):
 #     compute_radiance(object, x, w, ws, _output, W); // it is missing to retrieve proper jaccobians for x,w -> ws
 #     float env[OUTPUT_DIM];
 #     environment(object, ws, env);
-#     [[unroll]] for (int i = 0; i < OUTPUT_DIM; i++) _output[i] += W[i] * env[i];
+#     for (int i = 0; i < OUTPUT_DIM; i++) _output[i] += W[i] * env[i];
 # }}
 #
 # // TODO: the jaccobian for the ray transitions is missing. This can not propagate gradients wrt camera rays
@@ -4706,7 +4661,7 @@ def map_to_generic(map_name: str):
 #     float dL_dW[OUTPUT_DIM];
 #     float env[OUTPUT_DIM];
 #     environment(object, ws, env);
-#     [[unroll]] for (int i=0; i<OUTPUT_DIM; i++) dL_dW[i] = dL_dA[i] * env[i];
+#     for (int i=0; i<OUTPUT_DIM; i++) dL_dW[i] = dL_dA[i] * env[i];
 #
 #     //vec3 dL_denv = dL_dA * W;
 #     //vec3 dL_dw;
@@ -4775,7 +4730,6 @@ def map_to_generic(map_name: str):
 #     int samples = int(d / dt) + 1;
 #     vec3 dw = w * dt;
 #     x += dw * 0.5;
-#     [[unroll]]
 #     for (int i=0; i<samples; i++)
 #     {
 #         total_sigma += sigma(object, x);

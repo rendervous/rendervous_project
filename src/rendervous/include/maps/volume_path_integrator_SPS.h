@@ -82,7 +82,6 @@ void st_tau_bw(map_object, vec3 a, vec3 b, int bins, float dL_dtau)
     float d = length(a - b);
     float dL_dsigma = dL_dtau * d / bins;
 
-    [[unroll]]
     for (int i=0; i<bins; i++)
         sigma_bw(object, mix(b, a, (i+random())/bins), dL_dsigma);
 }

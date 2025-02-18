@@ -1,7 +1,7 @@
 FORWARD
 {
     float sum = 0;
-    [[unroll]] for (int i=0; i<(OUTPUT_DIM - 1) / 2; i++)
+    for (int i=0; i<(OUTPUT_DIM - 1) / 2; i++)
     {
         vec2 r = gauss2();
         _output[i*2] = r.x;

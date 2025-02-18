@@ -8,11 +8,8 @@ float sigma_at(map_object, ivec3 cell)
 
 void load_cell(map_object, ivec3 cell, out float[2][2][2] sigmas)
 {
-    [[unroll]]
     for (int dz = 0; dz < 2; dz ++)
-        [[unroll]]
         for (int dy = 0; dy < 2; dy ++)
-            [[unroll]]
             for (int dx = 0; dx < 2; dx ++)
                 sigmas[dz][dy][dx] = sigma_at(object, cell + ivec3(dx, dy, dz));
 }
@@ -66,11 +63,8 @@ void sigma_at_bw(map_object, ivec3 cell, float dL_dg)
 
 void update_cell_gradients(map_object, ivec3 cell, float[2][2][2] dL_dcell)
 {
-    [[unroll]]
     for (int dz = 0; dz < 2; dz ++)
-        [[unroll]]
         for (int dy = 0; dy < 2; dy ++)
-            [[unroll]]
             for (int dx = 0; dx < 2; dx ++)
                 sigma_at_bw(object, cell + ivec3(dx, dy, dz), dL_dcell[dz][dy][dx]);
 }

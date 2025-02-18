@@ -1,13 +1,13 @@
 void blend(map_object, inout float dst[OUTPUT_DIM], float_ptr src, float alpha)
 {
-    [[unroll]] for (int i=0; i<OUTPUT_DIM; i++) dst[i] += src.data[i] * alpha;
+    /*[[unroll]]*/ for (int i=0; i<OUTPUT_DIM; i++) dst[i] += src.data[i] * alpha;
 }
 
 FORWARD
 {
     vec3 c = vec3(_input[0], _input[1], _input[2]);
     vec3 ncoord = (c - parameters.bmin) * parameters.inv_bsize;
-    [[unroll]]
+    /*[[unroll]]*/
     for (int i=0; i<OUTPUT_DIM; i++)
         _output[i] = 0.0;
     if (any(lessThan(ncoord, vec3(0.0))) || any(greaterThanEqual(ncoord, vec3(1.0))))
@@ -60,7 +60,7 @@ BACKWARD
     float_ptr g110 = param_grad_buffer(parameters.grid, p + ivec3(0,1,1));
     float_ptr g111 = param_grad_buffer(parameters.grid, p + ivec3(1,1,1));
 
-    [[unroll]]
+    /*[[unroll]]*/
     for (int i=0; i<OUTPUT_DIM; i++)
     {
         atomicAdd_f(g000, i, _output_grad[i] * (1 - alpha.x) * (1 - alpha.y) * (1 - alpha.z));

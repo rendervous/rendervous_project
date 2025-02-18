@@ -14,7 +14,6 @@ bool adjacent_index(int index, int dc[4], out int adj_index)
 {
     int size = 1;
     adj_index = 0;
-    [[unroll]]
     for (int i=0; i<dim; i++)
     {
         int id = shape[dim-i-1];
@@ -36,7 +35,6 @@ float total_variation(int index, int adj_index)
     float_ptr center_value = float_ptr(in_tensor + index * channels * 4);
     float_ptr adj_value = float_ptr(in_tensor + adj_index * channels * 4);
     float tv = 0.0;
-    [[unroll]]
     for (int i=0; i<channels; i++)
         tv += abs(center_value.data[i] - adj_value.data[i]);
     return tv;
@@ -52,7 +50,6 @@ void main() {
     float tv = 0.0;
     int dc[4] = {0, 0, 0, 0};
     int adj_index;
-    [[unroll]]
     for (int d = 0; d < dim; d ++)
     {
         // get adjacents in each dimension

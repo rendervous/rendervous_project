@@ -1,3 +1,5 @@
+//#pragma unroll_loop(off)
+
 #ifndef COMMON_H
 #define COMMON_H
 
@@ -20,9 +22,9 @@
 #include "randoms.h"
 #include "scattering_AD.h"
 
-#define FORWARD void forward(map_object, float _input[INPUT_DIM], out float _output[OUTPUT_DIM])
-#define BACKWARD void backward(map_object, float _input[INPUT_DIM], float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM])
-#define BACKWARD_USING_OUTPUT void backward(map_object, float _input[INPUT_DIM], float _output[OUTPUT_DIM], float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM])
+#define FORWARD void forward(map_object, in float _input[INPUT_DIM], out float _output[OUTPUT_DIM])
+#define BACKWARD void backward(map_object, in float _input[INPUT_DIM], in float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM])
+#define BACKWARD_USING_OUTPUT void backward(map_object, in float _input[INPUT_DIM], in float _output[OUTPUT_DIM], in float _output_grad[OUTPUT_DIM], inout float _input_grad[INPUT_DIM])
 
 #define SAVE_SEED(v) uvec4 _rdv_saved_seed_##v = get_seed();
 #define SET_SEED(v) set_seed(_rdv_saved_seed_##v);
@@ -110,13 +112,13 @@ layout(buffer_reference, scalar, buffer_reference_align=8) buffer RaycastableInf
 #define DECLARE_TENSOR(dim) \
 float_ptr param_buffer(in Parameter tensor, int index[dim]) { \
     uint element_offset = 0; \
-    [[unroll]] \
+    /*[[unroll]]*/ \
     for (int d = 0; d < dim; d++) element_offset += tensor.stride[d] * index[d]; \
     return float_ptr(tensor.data + (element_offset << 2)); \
 }\
 float_ptr param_grad_buffer(in Parameter tensor, int index[dim]) { \
     uint element_offset = 0; \
-    [[unroll]] \
+    /*[[unroll]]*/ \
     for (int d = 0; d < dim; d++) element_offset += tensor.stride[d] * index[d]; \
     return float_ptr(tensor.grad_data + (element_offset << 2)); \
 }
@@ -202,25 +204,25 @@ void linear_fw(map_object, in float x[(in_features)], out float y[(out_features)
     float_ptr bias_buffer = float_ptr(bias); \
     int cw = 0; \
     int cb = 0; \
-    [[unroll]] for (int i = 0; i < out_features; i++) { \
+    /*[[unroll]]*/ for (int i = 0; i < out_features; i++) { \
         y[i] = 0.0; \
-        [[unroll]] for (int j=0; j<in_features; j++) y[i] += x[j] * weights_buffer.data[cw++]; \
+        /*[[unroll]]*/ for (int j=0; j<in_features; j++) y[i] += x[j] * weights_buffer.data[cw++]; \
         if (bias != 0) y[i] += bias_buffer.data[cb++]; \
     } \
 } \
 void linear_bw(map_object, in float x[in_features], in float de_dy[out_features], out float de_dx[in_features], GPUPtr weights, GPUPtr bias, GPUPtr de_dweights, GPUPtr de_dbias) { \
-    [[unroll]] for (int j=0; j < in_features; j++) de_dx[j] = 0; \
+    /*[[unroll]]*/ for (int j=0; j < in_features; j++) de_dx[j] = 0; \
     float_ptr weights_buffer = float_ptr(weights); \
     float_ptr dweight_buffer = float_ptr(de_dweights); \
     int N = out_features * in_features; \
-    [[unroll]] for (int c = 0; c < N; c++) { \
+    /*[[unroll]]*/ for (int c = 0; c < N; c++) { \
         int i = c / in_features; \
         int j = c % in_features; \
         de_dx[j] += de_dy[i] * weights_buffer.data[c]; \
         atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]); \
     } \
     float_ptr dbias_buffer = float_ptr(de_dbias); \
-    [[unroll]] for (int i=0; i<out_features; i++) atomicAdd_f(dbias_buffer, i, de_dy[i]); \
+    /*[[unroll]]*/ for (int i=0; i<out_features; i++) atomicAdd_f(dbias_buffer, i, de_dy[i]); \
 }
 
 
@@ -228,9 +230,9 @@ void linear_bw(map_object, in float x[in_features], in float de_dy[out_features]
 void matmul_fw(map_object, in float x[(in_features)], out float y[(out_features)], GPUPtr weights) { \
     float_ptr weights_buffer = float_ptr(weights); \
     int cw = 0; \
-    [[unroll]] for (int i = 0; i < out_features; i++) y[i] = 0.0;\
-    [[unroll]] for (int j = 0; j < in_features; j++) \
-    [[unroll]] for (int i = 0; i < out_features; i++) { \
+    /*[[unroll]]*/ for (int i = 0; i < out_features; i++) y[i] = 0.0;\
+    /*[[unroll]]*/ for (int j = 0; j < in_features; j++) \
+    /*[[unroll]]*/ for (int i = 0; i < out_features; i++) { \
          y[i] += x[j] * weights_buffer.data[cw++]; \
     } \
 } \
@@ -238,19 +240,20 @@ void matmul_bw(map_object, in float x[in_features], in float de_dy[out_features]
     float_ptr weights_buffer = float_ptr(weights); \
     float_ptr dweight_buffer = float_ptr(de_dweights); \
     int N = out_features * in_features; \
-    [[unroll]] for (int c = 0; c < N; c++) { \
+    /*[[unroll]]*/ for (int c = 0; c < N; c++) { \
         int j = c / out_features; \
         int i = c % out_features; \
         de_dx[j] += de_dy[i] * weights_buffer.data[c]; \
-        atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]); \
+        dweight_buffer.data[c] += de_dy[i] * x[j]; \
+        /*atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]);*/ \
     } \
 }\
 void pre_matmul_fw(map_object, in float x[(in_features)], out float y[(out_features)], GPUPtr weights) { \
     float_ptr weights_buffer = float_ptr(weights); \
     int cw = 0; \
-    [[unroll]] for (int i = 0; i < out_features; i++) { \
+    /*[[unroll]]*/ for (int i = 0; i < out_features; i++) { \
     y[i] = 0.0;\
-    [[unroll]] for (int j = 0; j < in_features; j++) \
+    /*[[unroll]]*/ for (int j = 0; j < in_features; j++) \
          y[i] += x[j] * weights_buffer.data[cw++]; \
     } \
 } \
@@ -258,11 +261,12 @@ void pre_matmul_bw(map_object, in float x[in_features], in float de_dy[out_featu
     float_ptr weights_buffer = float_ptr(weights); \
     float_ptr dweight_buffer = float_ptr(de_dweights); \
     int N = out_features * in_features; \
-    [[unroll]] for (int c = 0; c < N; c++) { \
+    /*[[unroll]]*/ for (int c = 0; c < N; c++) { \
         int i = c / in_features; \
         int j = c % in_features; \
         de_dx[j] += de_dy[i] * weights_buffer.data[c]; \
-        atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]); \
+        dweight_buffer.data[c] += de_dy[i] * x[j]; \
+        /*atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]);*/ \
     } \
 }
 
@@ -270,8 +274,8 @@ void pre_matmul_bw(map_object, in float x[in_features], in float de_dy[out_featu
 #define ACTIVATION_FUNCTION \
 float activation_fw(map_object, float x); \
 void activation_bw(map_object, float x, float dL_dy, inout float dL_dx); \
-FORWARD { [[unroll]] for (int i=0; i<INPUT_DIM; i++) _output[i] = activation_fw(object, _input[i]); } \
-BACKWARD { [[unroll]] for (int i=0; i<INPUT_DIM; i++) activation_bw(object, _input[i], _output_grad[i], _input_grad[i]); }
+FORWARD { /*[[unroll]]*/ for (int i=0; i<INPUT_DIM; i++) _output[i] = activation_fw(object, _input[i]); } \
+BACKWARD { /*[[unroll]]*/ for (int i=0; i<INPUT_DIM; i++) activation_bw(object, _input[i], _output_grad[i], _input_grad[i]); }
 
 
 struct Surfel

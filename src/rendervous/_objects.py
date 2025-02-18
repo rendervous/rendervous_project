@@ -227,7 +227,7 @@ def medium_phase(ds: _internal.DependencySet):
 def medium_phase_sampler_uniform(ds: _internal.DependencySet):
     dir_sampling = _maps.UniformDirectionSampler(6)
     ds.requires(medium_phase)
-    ds.add_parameters(phase_sampler=_maps._functionsampler(_maps.identity(6) | dir_sampling, ds.phase.cast(9,1))[0, 7, 8, 9])
+    ds.add_parameters(phase_sampler=_maps._functionsampler(_maps.X | dir_sampling, ds.phase.cast(9,1))[0, 7, 8, 9])
 
 def medium_phase_sampler_HG(ds: _internal.DependencySet):
     ds.requires(medium_phase_g)

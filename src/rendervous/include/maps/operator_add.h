@@ -1,8 +1,8 @@
 FORWARD {
-    float _temp[OUTPUT_DIM];
     forward(parameters.map_a, _input, _output);
+    float _temp[OUTPUT_DIM];
     forward(parameters.map_b, _input, _temp);
-    [[unroll]]
+    /*[[unroll]]*/
     for (int i=0; i<OUTPUT_DIM; i++)
         _output[i] += _temp[i];
 }
