@@ -29,19 +29,16 @@ from vulky import (
 
 __DEBUG__ = bool(os.environ.get('RDV_DEBUG', 'False') == 'True')
 
-try:
-    _create_device(device=rdv_device, debug=__DEBUG__)
+_create_device(device=rdv_device, debug=__DEBUG__)
 
-    from ._functions import *
-    from ._objects import *
-    from ._maps import *
-    from ._scenes import *
-    from ._internal import *
-    from ._compiling import *
+from ._functions import *
+from ._objects import *
+from ._maps import *
+from ._scenes import *
+from ._internal import *
+from ._compiling import *
 
-    start_engine()
-except:
-    print("[ERROR] Could not create rendervous device")
+start_engine()
 
 
 
