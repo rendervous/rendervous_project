@@ -294,7 +294,7 @@ void backward (map_object, in float _input[INPUT_DIM], in float _output_grad[OUT
         signature = map.signature
         if signature not in cls.__MAP_INSTANCES__:
             instance_id = len(cls.__MAP_INSTANCES__) + 1
-            codename = f'{type(map).__name__}_{instance_id}' # 'rdv_map_' + str(instance_id)
+            codename = f"{(type(map).__name__).replace('_','')}_{instance_id}" # 'rdv_map_' + str(instance_id)
             cls.__CS_SUPER_KERNEL__ += cls.append_map_instance_source_code(map, instance_id, codename)
             cls.__MAP_INSTANCES__[signature] = (instance_id, codename)
         return cls.__MAP_INSTANCES__[signature]

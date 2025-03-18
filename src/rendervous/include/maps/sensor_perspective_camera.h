@@ -10,8 +10,8 @@ FORWARD
     if (parameters.generation_mode == 1)
         subsample = vec2(random(), random());
 
-    float sx = ((index[2] + subsample.x) * 2 - parameters.width) * parameters.znear / parameters.height;
-    float sy = ((index[1] + subsample.y) * 2 - parameters.height) * parameters.znear / parameters.height;
+    float sx = ((index[2] + subsample.x) * 2 - parameters.width) * parameters.znear / parameters.width;
+    float sy = ((index[1] + subsample.y) * 2 - parameters.height) * parameters.znear / parameters.width;
     float sz = parameters.znear / tan(parameters.fov * 0.5);
 
     vec3 zaxis = normalize(d);
