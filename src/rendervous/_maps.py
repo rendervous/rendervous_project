@@ -1873,7 +1873,6 @@ class CustomGradMap(MapBase):
         return CustomGradMap(fw, bw)
 
 
-
 class BinaryOpMap(MapBase):
     __extension_info__ = None  # Mark as an abstract map
 
@@ -2006,6 +2005,7 @@ class ConcatMap(MapBase):
         if map_b.input_dim is not None and map_a.input_dim is None:
             map_a = map_a.cast(input_dim= map_b.input_dim)
 
+        assert map_a.output_dim is not None or map_b.output_dim is not None, "One of the two maps can not be generic in output"
         assert map_a.input_dim == map_b.input_dim
         super(ConcatMap, self).__init__(
             INPUT_DIM=map_a.input_dim,
@@ -2015,6 +2015,28 @@ class ConcatMap(MapBase):
         )
         self.map_a = map_a
         self.map_b = map_b
+
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
+        m = self
+        if output_dim is not None:
+            if self.output_dim is not None:
+                assert output_dim == self.output_dim, f"Can not change a fix output dim {self.output_dim} to {output_dim}"
+            if self.map_a.output_dim is not None:
+                assert output_dim > self.map_a.output_dim
+                map_b = self.map_b.cast(output_dim=output_dim - self.map_a.output_dim)
+                m = ConcatMap(self.map_a, map_b)
+            else:
+                assert output_dim > self.map_b.output_dim
+                map_a = self.map_a.cast(output_dim=output_dim - self.map_b.output_dim)
+                m = ConcatMap(map_a, self.map_b)
+        if input_dim is not None:
+            assert m.is_generic_input or m.input_dim == input_dim
+            if m.is_generic_input:
+                m = ConcatMap(
+                    self.map_a.cast(input_dim=input_dim),
+                    self.map_b.cast(input_dim=input_dim)
+                )
+        return m
 
 
 class MatrixMultMap(MapBase):
@@ -2057,15 +2079,19 @@ class ComposeSelectMap(MapBase):
             MAP_OUTPUT_DIM=map.output_dim
         )
         self.map = map
+        self.indices_list = indices
         for i in range(len(indices)):
             self.indices[i] = indices[i]
 
-    # def cast(self, input_dim=None, output_dim=None):
-    #     m = self
-    #     if output_dim is not None:
-    #         assert output_dim == self.output_dim or self.output_dim == 1
-    #         if self.output_dim != output_dim:
-    #             m = self.promote(output_dim)
+    def cast(self, input_dim=None, output_dim=None):
+        m = self
+        if output_dim is not None:
+            assert output_dim == self.output_dim or self.output_dim == 1
+            if self.output_dim != output_dim:
+                m = self.promote(output_dim)
+        if input_dim is not None:
+            m = ComposeSelectMap(self.map.cast(input_dim=input_dim), self.indices_list)
+        return m
 
 
 class InputSelectMap(MapBase):
@@ -2111,6 +2137,7 @@ class ReluMap(ActivationMap):
         path=_internal.__INCLUDE_PATH__ + '/maps/f_relu.h',
         bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT
     )
+
 
 class SinMap(ActivationMap):
     __extension_info__ = dict(
@@ -2598,6 +2625,32 @@ class OctUnprojection(MapBase):
     )
 
 
+class ProjectiveField(MapBase):
+    __extension_info__ = dict(
+        parameters=dict(
+            field=MapBase,
+            projection=_vk.mat4
+        ),
+        generics=dict(
+            INPUT_DIM=3,
+        ),
+        path=_internal.__INCLUDE_PATH__ + '/maps/projective_field.h',
+        bw_implementations=BACKWARD_IMPLEMENTATIONS.DEFAULT
+    )
+
+    def __init__(self, field: MapBase, projection: _vk.mat4):
+        field = field.cast(input_dim=3)
+        super().__init__(OUTPUT_DIM=field.output_dim)
+        self.field = field
+        self.projection = projection.transpose(dim0=-1, dim1=-2)
+
+    def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
+        assert input_dim is None or input_dim == 3
+        if output_dim is self.output_dim:
+            return self
+        return ProjectiveField(self.field.cast(output_dim=output_dim), self.projection)
+
+
 class UniformSampler(MapBase):
     __extension_info__ = dict(
         parameters=dict(
@@ -2676,7 +2729,7 @@ class XRQuadtreeRandomDirection(MapBase):
         }
         float pixel_area = 2 * pi * (cos(p0.y*pi) - cos(p1.y*pi)) / (1 << parameters.levels);
         float weight = pixel_area / max(0.000000001, prob);
-        vec3 w_out = randomDirection((p0.x * 2 - 1) * pi, (p1.x * 2 - 1) * pi, p0.y * pi, p1.y * pi);
+        vec3 w_out = randomDirection((p0.x * 2 - 1) * pi, (p1.x * 2 - 1) * pi, (p0.y - 0.5) * pi, (p1.y - 0.5) * pi);
         _output = float[4](w_out.x, w_out.y, w_out.z, weight);
     }
             """,
@@ -3049,13 +3102,13 @@ class DeltatrackingPathIntegrator(MapBase):
                  ds_epsilon: float
                  ):
         super(DeltatrackingPathIntegrator, self).__init__()
-        self.sigma = sigma
-        self.scattering_albedo = scattering_albedo
-        self.emission = emission
-        self.environment = environment
-        self.phase_sampler = phase_sampler
-        self.boundary = boundary
-        self.majorant = majorant
+        self.sigma = sigma.cast(3, 1)
+        self.scattering_albedo = scattering_albedo.cast(3, 3)
+        self.emission = emission.cast(6, 3)
+        self.environment = environment.cast(3, 3)
+        self.phase_sampler = phase_sampler.cast(6, 4)
+        self.boundary = boundary.cast(6, 2)
+        self.majorant = majorant.cast(6, 2)
         self.ds_epsilon = ds_epsilon
 
 

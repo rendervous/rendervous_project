@@ -39,8 +39,8 @@ void environment_sampler(map_object, vec3 x, out vec3 w, out vec3 E, out float p
         current_node = current_node * 4 + 1 + selected_child;
     }
     float pixel_area = 2 * pi * (cos(p0.y*pi) - cos(p1.y*pi)) / (1 << parameters.levels);
-    w = randomDirection((p0.x * 2 - 1) * pi, (p1.x * 2 - 1) * pi, p0.y * pi, p1.y * pi);
-    environment(object, x, w, E);
+    w = randomDirection((p0.x * 2 - 1) * pi, (p1.x * 2 - 1) * pi, (p0.y - 0.5) * pi, (p1.y - 0.5) * pi);
+    environment(object, w, E);
     E *= pixel_area / max(0.000000001, prob);
     pdf = max(0.000000001, prob) / pixel_area;
 }
@@ -83,7 +83,7 @@ void environment_sampler_bw(map_object, vec3 x, vec3 out_w, vec3 out_E, vec3 dL_
         current_node = current_node * 4 + 1 + selected_child;
     }
     float pixel_area = 2 * pi * (cos(p0.y*pi) - cos(p1.y*pi)) / (1 << parameters.levels);
-    out_w = randomDirection((p0.x * 2 - 1) * pi, (p1.x * 2 - 1) * pi, p0.y * pi, p1.y * pi);
+    out_w = randomDirection((p0.x * 2 - 1) * pi, (p1.x * 2 - 1) * pi, (p0.y - 0.5) * pi, (p1.y - 0.5) * pi);
     dL_dE *= pixel_area / max(0.000000001, prob);
-    environment_bw(object, x, out_w, dL_dE);
+    environment_bw(object, out_w, dL_dE);
 }

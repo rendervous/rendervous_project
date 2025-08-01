@@ -33,7 +33,7 @@ void path_trace(map_object, vec3 x, vec3 w, out vec3 A)
         if (!raycast(object, x, w, d, patch_index, surfel)) // skybox
         {
             vec3 E;
-            environment(object, x, w, E);
+            environment(object, w, E);
             A += W * E;
             return;
         }
@@ -108,14 +108,15 @@ void path_trace(map_object, vec3 x, vec3 w, out vec3 A)
 
         if (ws_pdf > 0 && bounces > 2) // not delta and after 2 bounces, apply Russian roulette
         {
-            if (random() < 0.5)
+            float Prr = min(1, (W.x + W.y + W.z)/3);
+            if (random() < Prr)
             {
                 W = vec3(0.0);
                 break;
             }
-            W *= 2;
+            W *= 1/Prr;
         }
-        x = surfel.P + w * 0.0001;
+        x = surfel.P + surfel.G * 0.0001 * sign(dot(surfel.G, w));
     }
 }
 
@@ -146,7 +147,7 @@ void path_trace_fw(map_object, vec3 x, vec3 w, out vec3 A)
         if (!raycast(object, x, w, d, patch_index, surfel)) // skybox
         {
             vec3 E;
-            environment(object, x, w, E);
+            environment(object, w, E);
             A += W * E;
             return;
         }
@@ -267,7 +268,7 @@ void path_trace_bw(map_object, vec3 x, vec3 w, vec3 out_A, vec3 dL_dA)
         {
             // vec3 E;
             vec3 dL_dE = dL_dA * W;
-            environment_bw(object, x, w, dL_dE);
+            environment_bw(object, w, dL_dE);
             // A += W * E;
             // rem_A -= W*E; // not necessary, should be 0 here at the last term
             return;

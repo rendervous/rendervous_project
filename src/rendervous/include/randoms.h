@@ -185,7 +185,7 @@ vec3 randomDirection(vec3 D, float fov) {
 
 vec3 randomDirection(float alpha0, float alpha1, float beta0, float beta1) {
 	float r1 = random() * (alpha1 - alpha0) + alpha0;
-	float r2 = cos(beta0) - random() * (cos(beta0) - cos(beta1));
+	float r2 = sin(beta0) + random() * (sin(beta1) - sin(beta0));
 	float sqrR2 = r2 * r2;
 	float two_pi_by_r1 = r1;
 	float sqrt_of_one_minus_sqrR2 = sqrt(max(0, 1.0 - sqrR2));

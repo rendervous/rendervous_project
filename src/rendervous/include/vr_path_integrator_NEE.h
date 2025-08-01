@@ -15,6 +15,8 @@ vec3 path_integrator_NEE(map_object, vec3 x, vec3 w, bool only_scatters)
 
     float EPS = 0.00001;
 
+    int bounces = 0;
+
     while (d > EPS)
     {
         float md;
@@ -55,6 +57,9 @@ vec3 path_integrator_NEE(map_object, vec3 x, vec3 w, bool only_scatters)
         float rho = phase_sampler(object, x, w, wo);
         W *= rho;
 
+        bounces ++;
+
+//        if (all(lessThan(W, vec3(EPS))))
         if (all(lessThan(W, vec3(EPS))))
         return R;
 

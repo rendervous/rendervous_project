@@ -85,6 +85,21 @@ POINTER(uvec3, 4)
 POINTER(uvec2, 4)
 
 
+float atomicAdd_f(float_ptr buf, int index, float value)
+{
+    #ifdef SUPPORTED_FLOAT_ATOM_ADD
+    return atomicAdd(buf.data[index], value);
+    #else
+    uint_ptr buf_as_uint = uint_ptr(uint64_t(buf));
+    uint old = buf_as_uint.data[index];
+    uint assumed;
+    do {
+        assumed = old;
+        old = atomicCompSwap(buf_as_uint.data[index], assumed, floatBitsToUint(value + uintBitsToFloat(assumed)));
+    } while(assumed != old);
+    return uintBitsToFloat(old);
+    #endif
+}
 // Predefined structs
 
 struct Parameter
@@ -146,6 +161,44 @@ vec4 param_vec4(in Parameter tensor){
     return vec4(buf.data[0], buf.data[1], buf.data[2], buf.data[3]);
 }
 
+void param_grad_float(in Parameter tensor, float dL_dv)
+{
+    if (tensor.grad_data == 0)
+    return;
+    float_ptr buf = float_ptr(tensor.grad_data);
+    atomicAdd_f(buf, 0, dL_dv);
+}
+
+void param_grad_vec2(in Parameter tensor, vec2 dL_dv)
+{
+    if (tensor.grad_data == 0)
+    return;
+    float_ptr buf = float_ptr(tensor.grad_data);
+    atomicAdd_f(buf, 0, dL_dv.x);
+    atomicAdd_f(buf, 1, dL_dv.y);
+}
+
+void param_grad_vec3(in Parameter tensor, vec3 dL_dv)
+{
+    if (tensor.grad_data == 0)
+    return;
+    float_ptr buf = float_ptr(tensor.grad_data);
+    atomicAdd_f(buf, 0, dL_dv.x);
+    atomicAdd_f(buf, 1, dL_dv.y);
+    atomicAdd_f(buf, 2, dL_dv.z);
+}
+
+void param_grad_vec4(in Parameter tensor, vec4 dL_dv)
+{
+    if (tensor.grad_data == 0)
+    return;
+    float_ptr buf = float_ptr(tensor.grad_data);
+    atomicAdd_f(buf, 0, dL_dv.x);
+    atomicAdd_f(buf, 1, dL_dv.y);
+    atomicAdd_f(buf, 2, dL_dv.z);
+    atomicAdd_f(buf, 3, dL_dv.w);
+}
+
 DECLARE_TENSOR(1)
 
 DECLARE_TENSOR(2)
@@ -180,21 +233,7 @@ float_ptr param_grad_buffer(in Parameter tensor, ivec4 index) {
     return param_grad_buffer(tensor, int[4](index.w, index.z, index.y, index.x));
 }
 
-float atomicAdd_f(float_ptr buf, int index, float value)
-{
-    #ifdef SUPPORTED_FLOAT_ATOM_ADD
-    return atomicAdd(buf.data[index], value);
-    #else
-    uint_ptr buf_as_uint = uint_ptr(uint64_t(buf));
-    uint old = buf_as_uint.data[index];
-    uint assumed;
-    do {
-        assumed = old;
-        old = atomicCompSwap(buf_as_uint.data[index], assumed, floatBitsToUint(value + uintBitsToFloat(assumed)));
-    } while(assumed != old);
-    return uintBitsToFloat(old);
-    #endif
-}
+
 
 #define IS_NULL(x) (GPUPtr(x) == 0)
 
@@ -244,8 +283,8 @@ void matmul_bw(map_object, in float x[in_features], in float de_dy[out_features]
         int j = c / out_features; \
         int i = c % out_features; \
         de_dx[j] += de_dy[i] * weights_buffer.data[c]; \
-        dweight_buffer.data[c] += de_dy[i] * x[j]; \
-        /*atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]);*/ \
+        /*dweight_buffer.data[c] += de_dy[i] * x[j];*/ \
+        atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]); \
     } \
 }\
 void pre_matmul_fw(map_object, in float x[(in_features)], out float y[(out_features)], GPUPtr weights) { \
@@ -265,8 +304,8 @@ void pre_matmul_bw(map_object, in float x[in_features], in float de_dy[out_featu
         int i = c / in_features; \
         int j = c % in_features; \
         de_dx[j] += de_dy[i] * weights_buffer.data[c]; \
-        dweight_buffer.data[c] += de_dy[i] * x[j]; \
-        /*atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]);*/ \
+        /*dweight_buffer.data[c] += de_dy[i] * x[j];*/ \
+        atomicAdd_f(dweight_buffer, c, de_dy[i] * x[j]); \
     } \
 }
 

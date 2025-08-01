@@ -6,7 +6,7 @@ FORWARD {
     vec3 w = vec3(_input[3], _input[4], _input[5]);
     BEGIN_BRANCH(E)
     vec3 E;
-    environment(object, x, w, E);
+    environment(object, w, E);
     END_BRANCH(E)
     BEGIN_BRANCH(T)
     float T = ray_visibility(object, x, w);
@@ -24,12 +24,12 @@ BACKWARD_USING_OUTPUT {
     BEGIN_BRANCH(E)
     vec3 E;
     SAVE_SEED(before_E)
-    environment(object, x, w, E);
+    environment(object, w, E);
     vec3 Tc = Tr / E;
     Tc = mix(Tc, vec3(0.0), isnan(Tc));
     float T = max(Tc.x, max(Tc.y, Tc.z));
     SET_SEED(before_E)
-    environment_bw(object, x, w, dL_dTr * T);
+    environment_bw(object, w, dL_dTr * T);
     END_BRANCH(E)
     float dL_dT = dot(dL_dTr, E);
     BEGIN_BRANCH(T)

@@ -11,9 +11,10 @@
 bool intersect_ray_box(vec3 x, vec3 w, vec3 b_min, vec3 b_max, out float tMin, out float tMax)
 {
     // un-parallelize w
-    w.x = abs(w).x <= 0.000001 ? 0.000001 : w.x;
-    w.y = abs(w).y <= 0.000001 ? 0.000001 : w.y;
-    w.z = abs(w).z <= 0.000001 ? 0.000001 : w.z;
+    vec3 aw = abs(w);
+    w.x = aw.x <= 0.000001 ? 0.000001 : w.x;
+    w.y = aw.y <= 0.000001 ? 0.000001 : w.y;
+    w.z = aw.z <= 0.000001 ? 0.000001 : w.z;
     vec3 C_Min = (b_min - x)/w;
     vec3 C_Max = (b_max - x)/w;
 	tMin = max(max(min(C_Min[0], C_Max[0]), min(C_Min[1], C_Max[1])), min(C_Min[2], C_Max[2]));
@@ -28,9 +29,10 @@ bool intersect_ray_box(vec3 x, vec3 w, vec3 b_min, vec3 b_max, out float tMin, o
 void ray_box_intersection(vec3 x, vec3 w, vec3 b_min, vec3 b_max, out float tMin, out float tMax)
 {
     // un-parallelize w
-    w.x = abs(w).x <= 0.000001 ? 0.000001 : w.x;
-    w.y = abs(w).y <= 0.000001 ? 0.000001 : w.y;
-    w.z = abs(w).z <= 0.000001 ? 0.000001 : w.z;
+    vec3 aw = abs(w);
+    w.x = aw.x <= 0.000001 ? 0.000001 : w.x;
+    w.y = aw.y <= 0.000001 ? 0.000001 : w.y;
+    w.z = aw.z <= 0.000001 ? 0.000001 : w.z;
     vec3 C_Min = (b_min - x)/w;
     vec3 C_Max = (b_max - x)/w;
 	tMin = max(max(min(C_Min[0], C_Max[0]), min(C_Min[1], C_Max[1])), min(C_Min[2], C_Max[2]));
@@ -144,7 +146,7 @@ mat4 LookAtLH(vec3 camera, vec3 target, vec3 upVector)
 mat4 PerspectiveFovLH(float fieldOfView, float aspectRatio, float znearPlane, float zfarPlane)
 {
 	float h = 1.0 / tan(fieldOfView / 2.0);
-	float w = h * aspectRatio;
+	float w = h / aspectRatio;
 
 	return mat4(
 		w, 0, 0, 0,
@@ -153,38 +155,36 @@ mat4 PerspectiveFovLH(float fieldOfView, float aspectRatio, float znearPlane, fl
 		0, 0, -znearPlane * zfarPlane / (zfarPlane - znearPlane), 0);
 }
 
+/*
+Converts angle from azimuth (angles.x) [-pi...pi] and polar (angles.y) [-pi/2...pi/2] to a direction.
+angle 0,0 corresponds to forward direction in z.
+*/
 vec3 usc2dir(vec2 angles)
 {
-    float y = cos(angles.y);
-    float s = sin(angles.y);
-    float x = sin(angles.x) * s;
-    float z = cos(angles.x) * s;
+    float y = sin(angles.y);
+    float r = cos(angles.y);
+    float x = sin(angles.x) * r;
+    float z = cos(angles.x) * r;
     return vec3(x, y, z);
 }
 
 vec2 dir2usc(vec3 w) {
     w.x += 0.0000001 * int(w.x == 0.0 && w.z == 0.0);
-    float beta = acos(clamp(w.y, -1.0, 1.0));
+    float beta = asin(clamp(w.y, -1.0, 1.0));
     float alpha = atan(w.x, w.z);
     return vec2(alpha, beta);
 }
 
 vec2 dir2xr(vec3 w)
 {
-    w.x += 0.0000001 * int(w.x == 0.0 && w.z == 0.0);
-    float x = atan(w.x, w.z) * inverseOfPi;
-    float y = -2 * asin(clamp(w.y, -1.0, 1.0)) * inverseOfPi;
-    return vec2(x, y);
+    vec2 angles = dir2usc(w);
+    return angles * vec2(inverseOfPi, 2*inverseOfPi);
 }
 
 vec3 xr2dir(vec2 c)
 {
-    vec2 angles = vec2(c.x * pi, c.y * piOverTwo);
-    float y = -sin(angles.y);
-    float r = cos(angles.y);
-    float x = sin(angles.x) * r;
-    float z = cos(angles.x) * r;
-    return vec3(x, y, z);
+    vec2 angles = c * vec2(pi, piOverTwo);
+    return usc2dir(angles);
 }
 
 

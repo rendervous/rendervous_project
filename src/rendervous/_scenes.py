@@ -620,7 +620,7 @@ class Environment(_maps.MapBase):
             path = path_or_code
             code = None
         return dict(
-            generics=dict(INPUT_DIM=6, OUTPUT_DIM=3),
+            generics=dict(INPUT_DIM=3, OUTPUT_DIM=3),
             parameters=parameters,
             path=path,
             code=code,
@@ -629,7 +629,7 @@ class Environment(_maps.MapBase):
 
     @staticmethod
     def signature():
-        return (6, 3)
+        return (3, 3)
 
 
 class EnvironmentSamplerPDF(_maps.MapBase):
@@ -686,7 +686,7 @@ class EnvironmentSampler(_maps.MapBase):  # x -> we, E(we)/pdf(we), pdf(we)
             code=code,
         )
 
-    def get_environment(self) -> _maps.MapBase:  # x, we -> E(we)
+    def get_environment(self) -> _maps.MapBase:  # we -> E(we)
         raise NotImplementedError()
 
     def get_pdf(self) -> _maps.MapBase:   # x, we -> pdf(we)
@@ -753,6 +753,24 @@ class XREnvironmentSampler(EnvironmentSampler):
         densities /= max(densities.sum(), 0.00000001)
         quadtree = _functions.create_density_quadtree(densities)
         return XREnvironmentSampler(_maps.Image2D(environment_tensor), quadtree, levels)
+
+
+class DeltaEnvironmentSampler(EnvironmentSampler):
+    __extension_info__ = EnvironmentSampler.create_extension_info(
+        _internal.__INCLUDE_PATH__ + '/maps/environment_sampler_delta.h',
+        light_direction=_maps.ParameterDescriptor,
+        light_intensity=_maps.ParameterDescriptor
+    )
+    def __init__(self, light_direction: _vk.vec3, light_intensity: _vk.vec3):
+        super().__init__()
+        self.light_direction = _maps.parameter(light_direction)
+        self.light_intensity = _maps.parameter(light_intensity)
+
+    def get_pdf(self) -> EnvironmentSamplerPDF:
+        return _maps.ONE.cast(*EnvironmentSamplerPDF.signature())
+
+    def get_environment(self) -> _maps.MapBase:
+        return _maps.ZERO.cast(*Environment.signature())
 
 
 class UniformEnvironmentSampler(EnvironmentSampler):
@@ -1168,6 +1186,8 @@ class AlbedoSurfaceScatteringSampler(SurfaceScatteringSampler):
     )
 
     def __init__(self, base: SurfaceScatteringSampler, albedo: _maps.MapBase):
+        if albedo.is_generic_input:
+            albedo = albedo.cast(input_dim=2)
         assert albedo.input_dim == 2 or albedo.input_dim == 3, 'Can not use a map to albedo that is not 2D or 3D'
         albedo = albedo.cast(output_dim = 3)
         super().__init__(ALBEDO_MAP_DIM = albedo.input_dim)
@@ -1283,6 +1303,8 @@ class MixtureSurfaceScatteringSampler(SurfaceScatteringSampler):
             """
     )
     def __init__(self, scattering_sampler_a: SurfaceScatteringSampler, scattering_sampler_b: SurfaceScatteringSampler, alpha: _maps.MapBase):
+        if alpha.is_generic_input:
+            alpha = alpha.cast(input_dim=2)
         assert alpha.input_dim == 2 or alpha.input_dim == 3
         alpha = alpha.cast(output_dim = 1)
         super().__init__(ALPHA_MAP_DIM=alpha.input_dim)
@@ -1515,7 +1537,7 @@ class EnvironmentGathering(SurfaceGathering):
         if (we_pdf == -1) // delta scattering
         {
             x = surfel.P + we * 0.0001;
-            environment(object, x, we, E);
+            environment(object, we, E);
         }
         else 
         {
@@ -1711,9 +1733,9 @@ class RTMediumPathIntegrator(MediumPathIntegrator):
             scattering_albedo = _maps.ZERO
             phase_sampler = _maps.ZERO
         super().__init__(gathering, medium_filter=medium_filter)
-        self.sigma = sigma
-        self.scattering_albedo = scattering_albedo
-        self.phase_sampler = phase_sampler
+        self.sigma = sigma.cast(3,1)
+        self.scattering_albedo = scattering_albedo.cast(3,3)
+        self.phase_sampler = phase_sampler.cast(*PhaseSampler.signature())
         self.majorant = _maps.parameter(majorant)
 
 
@@ -1735,7 +1757,7 @@ class HomogeneousMediumPathIntegrator(MediumPathIntegrator):
         super().__init__(gathering, medium_filter)
         self.sigma = _maps.parameter(sigma)
         self.scattering_albedo = _maps.parameter(scattering_albedo)
-        self.phase_sampler = phase_sampler
+        self.phase_sampler = phase_sampler.cast(*PhaseSampler.signature())
 
 
 # class VolumeEmissionGathering(MapBase):
@@ -2312,6 +2334,52 @@ class PathtracedScene(_maps.MapBase):
                 self.patch_info[i].outside_medium = 0 if omi == -1 else medium_integrator[omi].__bindable__.device_ptr
 
 
+class ScenePathSampler(_maps.MapBase):
+    __extension_info__ = dict(
+        parameters=dict(
+            surfaces=_maps.MapBase,
+            boundaries=_maps.MapBase,
+            patch_info=[-1, PTPatchInfo]
+        ),
+        generics=dict(INPUT_DIM=6, OUTPUT_DIM=6),
+        bw_implementations=_maps.BACKWARD_IMPLEMENTATIONS.NONE,
+        dynamics=[
+            SurfaceScatteringSampler.signature(),
+            MediumPathIntegrator.signature()
+        ],
+        path=_internal.__INCLUDE_PATH__+'/maps/scene_path_sampler.h'
+    )
+    def __init__(self,
+        surfaces: Geometry,
+        surface_scattering_sampler: _typing.Optional[_typing.List[SurfaceScatteringSampler]] = None,
+        medium_integrator: _typing.Optional[_typing.List[MediumPathIntegrator]] = None,
+        inside_medium_indices: _typing.Optional[_typing.List[int]] = None
+    ):
+        assert not surfaces.is_generic
+        if medium_integrator is not None:
+            assert all(not m.is_generic for m in medium_integrator if m is not None), f"Found a generic medium integrator"
+        super().__init__(len(surfaces))
+        self.surfaces = surfaces.cast(*Geometry.signature())
+        self.boundaries = surfaces.get_boundary().cast(*Boundary.signature())
+        for i in range(len(surfaces)):
+            self.patch_info[i].surface_scattering_sampler = 0
+            self.patch_info[i].surface_gathering = 0
+            self.patch_info[i].inside_medium = 0
+            self.patch_info[i].outside_medium = 0
+        assert surface_scattering_sampler is None or len(surface_scattering_sampler) == len(surfaces)
+        self.surface_scatterers = surface_scattering_sampler
+        if surface_scattering_sampler is not None:
+            for i, sss in enumerate(surface_scattering_sampler):
+                self.patch_info[i].surface_scattering_sampler = 0 if sss is None else sss.__bindable__.device_ptr
+        self.media_modules = _torch.nn.ModuleList(medium_integrator)
+        assert inside_medium_indices is None or len(inside_medium_indices) == len(surfaces)
+        if inside_medium_indices is not None:
+            for i, imi in enumerate(inside_medium_indices):
+                assert imi == -1 or (medium_integrator is not None and imi < len(medium_integrator))
+                self.patch_info[i].inside_medium = 0 if imi == -1 else medium_integrator[imi].__bindable__.device_ptr
+
+
+
 class Scene:
     def __init__(self,
                  surfaces: Geometry,
@@ -2444,6 +2512,21 @@ class Scene:
         ],
             inside_medium_indices=self.inside_media,
             outside_medium_indices=self.outside_media
+        )
+
+    def path_sampler(self) -> _maps.MapBase:
+        return ScenePathSampler(
+            surfaces=self.surfaces,
+            surface_scattering_sampler=None if self.materials is None else [
+                None if m is None else m.sampler for m in self.materials
+            ],
+            medium_integrator=None if self.media is None else [
+                None if m is None else m.environment_gathering(
+                    self.environment_sampler, self.visibility(), boundaries=self.boundaries
+                ) for m in self.media
+                # None if m is None else m.default_gathering() for m in self.media
+        ],
+            inside_medium_indices=self.inside_media,
         )
 
     def transmittance(self) -> _maps.MapBase:
