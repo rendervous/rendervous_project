@@ -68,7 +68,7 @@ def random_equidistant_camera_poses(N, *, seed: int = 13, radius: float = 1.0):
     return camera_poses_tensor
 
 
-def oct_camera_poses(N, *, seed: int = 13, radius: float = 1.0):
+def oct_camera_poses(N, *, radius: float = 1.0):
     with _torch.no_grad():
         u = _torch.arange(-1.0 + 1.0/N, 1.0, 2.0/N, device=_internal.device())
         c = _torch.cartesian_prod(u, u)

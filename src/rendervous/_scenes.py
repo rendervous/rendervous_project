@@ -1,5 +1,6 @@
 import torch as _torch
 import numpy as _np
+
 from . import _internal
 from . import _maps
 from . import _functions
@@ -475,10 +476,11 @@ class MeshGeometry(Geometry):
         self.position_checker = _maps.TensorCheck()
         self.mesh_ads = self.scene_ads.handle
         self.update_ads_if_necessary()
-
-    def _pre_eval(self, include_grads: bool = False):
-        super()._pre_eval(include_grads)
         self.mesh_info_buffer.update_gpu()
+
+    # def _pre_eval(self, include_grads: bool = False):
+    #     super()._pre_eval(include_grads)
+    #     # self.mesh_info_buffer.update_gpu()
 
     def update_ads_if_necessary(self) -> bool:
         if self.position_checker.changed(self.mesh_info_module.positions):
@@ -2314,11 +2316,11 @@ class PathtracedScene(_maps.MapBase):
             self.patch_info[i].inside_medium = 0
             self.patch_info[i].outside_medium = 0
         assert surface_scattering_sampler is None or len(surface_scattering_sampler) == len(surfaces)
-        self.surface_scatterers = surface_scattering_sampler
+        self.surface_scatterers = _torch.nn.ModuleList(surface_scattering_sampler)
         if surface_scattering_sampler is not None:
             for i, sss in enumerate(surface_scattering_sampler):
                 self.patch_info[i].surface_scattering_sampler = 0 if sss is None else sss.__bindable__.device_ptr
-        self.surface_gatherers = surface_gathering
+        self.surface_gatherers = _torch.nn.ModuleList(surface_gathering)
         if surface_gathering is not None:
             for i, sg in enumerate(surface_gathering):
                 self.patch_info[i].surface_gathering = 0 if sg is None else sg.__bindable__.device_ptr
@@ -2361,13 +2363,14 @@ class ScenePathSampler(_maps.MapBase):
         super().__init__(len(surfaces))
         self.surfaces = surfaces.cast(*Geometry.signature())
         self.boundaries = surfaces.get_boundary().cast(*Boundary.signature())
+        self.medium_integrators = _torch.nn.ModuleList(medium_integrator)
         for i in range(len(surfaces)):
             self.patch_info[i].surface_scattering_sampler = 0
             self.patch_info[i].surface_gathering = 0
             self.patch_info[i].inside_medium = 0
             self.patch_info[i].outside_medium = 0
         assert surface_scattering_sampler is None or len(surface_scattering_sampler) == len(surfaces)
-        self.surface_scatterers = surface_scattering_sampler
+        self.surface_scatterers = _torch.nn.ModuleList(surface_scattering_sampler)
         if surface_scattering_sampler is not None:
             for i, sss in enumerate(surface_scattering_sampler):
                 self.patch_info[i].surface_scattering_sampler = 0 if sss is None else sss.__bindable__.device_ptr
@@ -2473,7 +2476,8 @@ class Scene:
 
 
     def pathtrace(self) -> _maps.MapBase:
-        return PathtracedScene(
+        if not hasattr(self, 'pathtrace_cache'):
+            self.pathtrace_cache = PathtracedScene(
             surfaces=self.surfaces,
             environment=self.environment_sampler.get_environment(),
             direct_gathering=_maps.ZERO,
@@ -2489,45 +2493,50 @@ class Scene:
             inside_medium_indices=self.inside_media,
             outside_medium_indices=self.outside_media
         )
+        return self.pathtrace_cache
 
     def pathtrace_environment_nee(self) -> _maps.MapBase:
-        return PathtracedScene(
-            surfaces=self.surfaces,
-            # environment=ray_direction(),
-            environment=_maps.ZERO,
-            direct_gathering=self.transmittance(),
-            surface_gathering=None if self.materials is None else [
-                # None if m is None else m.emission_gathering() for m in self.materials
-                # None for m in self.materials
-                None if m is None else m.environment_gathering(self.environment_sampler, self.visibility()) for m in self.materials
+        if not hasattr(self, 'pathtrace_environment_nee_cache'):
+            self.pathtrace_environment_nee_cache = PathtracedScene(
+                surfaces=self.surfaces,
+                # environment=ray_direction(),
+                environment=_maps.ZERO,
+                direct_gathering=self.transmittance(),
+                surface_gathering=None if self.materials is None else [
+                    # None if m is None else m.emission_gathering() for m in self.materials
+                    # None for m in self.materials
+                    None if m is None else m.environment_gathering(self.environment_sampler, self.visibility()) for m in self.materials
+                ],
+                surface_scattering_sampler=None if self.materials is None else [
+                    None if m is None else m.sampler for m in self.materials
+                ],
+                medium_integrator=None if self.media is None else [
+                    None if m is None else m.environment_gathering(
+                        self.environment_sampler, self.visibility(), boundaries=self.boundaries
+                    ) for m in self.media
+                    # None if m is None else m.default_gathering() for m in self.media
             ],
-            surface_scattering_sampler=None if self.materials is None else [
-                None if m is None else m.sampler for m in self.materials
-            ],
-            medium_integrator=None if self.media is None else [
-                None if m is None else m.environment_gathering(
-                    self.environment_sampler, self.visibility(), boundaries=self.boundaries
-                ) for m in self.media
-                # None if m is None else m.default_gathering() for m in self.media
-        ],
-            inside_medium_indices=self.inside_media,
-            outside_medium_indices=self.outside_media
-        )
+                inside_medium_indices=self.inside_media,
+                outside_medium_indices=self.outside_media
+            )
+        return self.pathtrace_environment_nee_cache
 
     def path_sampler(self) -> _maps.MapBase:
-        return ScenePathSampler(
-            surfaces=self.surfaces,
-            surface_scattering_sampler=None if self.materials is None else [
-                None if m is None else m.sampler for m in self.materials
+        if not hasattr(self, 'path_sampler_cache'):
+            self.path_sampler_cache = ScenePathSampler(
+                surfaces=self.surfaces,
+                surface_scattering_sampler=None if self.materials is None else [
+                    None if m is None else m.sampler for m in self.materials
+                ],
+                medium_integrator=None if self.media is None else [
+                    None if m is None else m.environment_gathering(
+                        self.environment_sampler, self.visibility(), boundaries=self.boundaries
+                    ) for m in self.media
+                    # None if m is None else m.default_gathering() for m in self.media
             ],
-            medium_integrator=None if self.media is None else [
-                None if m is None else m.environment_gathering(
-                    self.environment_sampler, self.visibility(), boundaries=self.boundaries
-                ) for m in self.media
-                # None if m is None else m.default_gathering() for m in self.media
-        ],
-            inside_medium_indices=self.inside_media,
-        )
+                inside_medium_indices=self.inside_media,
+            )
+        return self.path_sampler_cache
 
     def transmittance(self) -> _maps.MapBase:
         return self.transmittance_map

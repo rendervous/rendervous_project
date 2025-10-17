@@ -40,7 +40,7 @@ from ._scenes import *
 from ._internal import *
 from ._compiling import *
 
-start_engine()
+start_session()
 
 
 

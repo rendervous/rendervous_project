@@ -16,7 +16,7 @@ BACKWARD
 {
     vec4 p = vec4(_input[0], _input[1], _input[2], 1.0);
     p = parameters.projection * p;
-    if (p.z < -p.w || p.z > p.w || p.x < -p.w || p.x > p.w || p.y < -p.w || p.y > p.w) // clip
+    if (p.z < 0.0 || p.z > p.w || p.x < -p.w || p.x > p.w || p.y < -p.w || p.y > p.w) // clip
         return;
     p.xyz /= p.w;
     float inner_input_grad[3];

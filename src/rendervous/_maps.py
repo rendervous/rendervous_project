@@ -11,6 +11,10 @@ import math as _math
 import threading as _threading
 
 
+__ASSERT_NANS__ = False
+__SHOW_CODE__ = False
+
+
 class BACKWARD_IMPLEMENTATIONS(_enum.IntEnum):
     NONE = 0
     """
@@ -34,34 +38,47 @@ class DispatcherEngine:
     __REGISTERED_MAPS__ = []  # Each map type
     __MAP_INSTANCES__ = {}  # All instances, from tuple with signature to codename.
     __MAP_BY_SIGNATURE__ = { } # All different-signature maps grouped by parameter signature
-    # __RAYCASTER_INSTANCES__ = { }  # All instances, from tuple with signature to codename.
-    __CS_SUPER_KERNEL__ = ""  # Current engine code
-    __INCLUDE_DIRS__ = []
-    __DEFINED_STRUCTS__ = {}
+    __KERNELS__ = { }  # Kernel for each map by signature
+    __INCLUDE_DIRS__ = []  # All directory include in registered maps
+    __DEFINED_STRUCTS__ = {}  # All defined structures
+    __INNER_STRUCTS__ = []  # Defined structs in common.h
     __ENGINE_OBJECTS__ = None  # Objects to dispatch map evaluation and raycasting
 
-    __FW_RT_ENGINE_PIPELINES__ = {}  # Pipelines and RT Programs for fw map evaluation
-    __FW_CS_ENGINE_PIPELINES__ = {}  # Pipelines and RT Programs for fw map evaluation
+    __FW_CS_ENGINE_PIPELINES__ = {}  # Pipelines and CS Programs for fw map evaluation
     __FW_DISPATCHER_CACHED_MAN__ = {}  # command buffers for dispatching fw map evaluations
-    __FW_RAYCASTER_CACHED_MAN__ = {}  # command buffers for dispatching fw raycast evaluations
     __FW_CAPTURE_CACHED_MAN__ = {}  # command buffers for dispatching fw capture evaluations
 
-    __BW_RT_ENGINE_PIPELINES__ = {}  # Pipelines and RT Programs for bw map evaluation
     __BW_CS_ENGINE_PIPELINES__ = {}  # Pipelines and RT Programs for bw map evaluation
     __BW_DISPATCHER_CACHED_MAN__ = {}  # command buffers for dispatching bw map evaluations
-    __BW_RAYCASTER_CACHED_MAN__ = {}  # command buffers for dispatching bw raycast evaluations
     __BW_CAPTURE_CACHED_MAN__ = {}  # command buffers for dispatching bw capture evaluations
 
     __LOCKER__ = _threading.Lock()
 
     @classmethod
-    def start(cls):
+    def _generate_super_kernel(cls, *maps: 'MapBase') -> str:
+        codes = []
+        for k, s in cls.__DEFINED_STRUCTS__.items():
+            if k not in cls.__INNER_STRUCTS__:
+                codes.append(s)  # append all external defined structs not matter dependences
+        dependences = {}
+        for map in maps:
+            dependences[map.rdv_map_id] = map.signature
+            for d in map._dependences():
+                dependences[d.rdv_map_id] = d.signature
+        codes += [cls.__KERNELS__[dependences[k]] for k in sorted(dependences)]
+        return '\n\r'.join(codes)
+
+    @classmethod
+    def start_session(cls):
+        # Defined structs in common.h
         _, inner_structs, _ = cls.create_code_for_struct_declaration(ParameterDescriptor)
         cls.__DEFINED_STRUCTS__.update(inner_structs)
         _, inner_structs, _ = cls.create_code_for_struct_declaration(MeshInfo)
         cls.__DEFINED_STRUCTS__.update(inner_structs)
         _, inner_structs, _ = cls.create_code_for_struct_declaration(RaycastableInfo)
         cls.__DEFINED_STRUCTS__.update(inner_structs)
+        # Add to inner array to check and dont redefine
+        cls.__INNER_STRUCTS__.extend(cls.__DEFINED_STRUCTS__)
 
     @classmethod
     def register_map(cls, map_type: 'MapMeta') -> int:
@@ -167,13 +184,17 @@ class DispatcherEngine:
         return type_definition.__name__, {}, []  # vec and mats
 
     @classmethod
-    def create_code_for_dynamic_map(cls, input_dim, output_dim):
+    def create_code_for_dynamic_map(cls, map: 'MapBase', input_dim, output_dim):
         fw_cases = ""
         bw_cases = ""
         bw_using_output_cases = ""
+        dependences = map._dependences()
+        children_map_ids = set([d.rdv_map_id for d in dependences])
         sig = (input_dim, output_dim)
         if sig in cls.__MAP_BY_SIGNATURE__:
             for (id, code_name) in cls.__MAP_BY_SIGNATURE__[sig]:
+                if id not in children_map_ids:
+                    continue
                 fw_cases += f"""
                 case {id}: forward({code_name}(buffer_{code_name}(dynamic_map)), _input, _output); break;
                 """
@@ -217,7 +238,7 @@ void dynamic_backward(map_object, GPUPtr dynamic_map, in float _input[{input_dim
         """
 
     @classmethod
-    def append_map_instance_source_code(cls, map: 'MapBase', instance_id: int, codename: str):
+    def generate_map_instance_source_code(cls, map: 'MapBase', instance_id: int, codename: str):
         code = ""
         map_object_parameters_code, external_structs, _ = cls.create_code_for_map_declaration(map.map_object_definition,
                                                                                               map._rdv_accessor,
@@ -227,7 +248,7 @@ void dynamic_backward(map_object, GPUPtr dynamic_map, in float _input[{input_dim
                 assert cls.__DEFINED_STRUCTS__[
                            struct_name] == struct_code, f'A different body was already defined for {struct_name}'
             else:
-                code += struct_code + "\n"
+                # code += struct_code + "\n"  # only save in defined structs
                 cls.__DEFINED_STRUCTS__[struct_name] = struct_code
         # Add buffer_reference definition with codename and map object layout
         code += f"""
@@ -240,7 +261,7 @@ struct {codename} {{ buffer_{codename} data; }};
         code += f"#define parameters object.data \n"
 
         for s in map.dynamic_requires:  # Generate dynamic access code for all required signatures
-            code += cls.create_code_for_dynamic_map(*s)
+            code += cls.create_code_for_dynamic_map(map, *s)
 
         code += map.map_source_code + "\n"
         if (map.input_dim, map.output_dim) not in cls.__MAP_BY_SIGNATURE__:
@@ -286,7 +307,9 @@ void backward (map_object, in float _input[INPUT_DIM], in float _output_grad[OUT
         for g in map.generics:
             code += f"#undef {g}\n"
 
-        cls.__INCLUDE_DIRS__.extend(map.include_dirs)
+        for d in map.include_dirs:
+            if not d in cls.__INCLUDE_DIRS__:  # avoid repeating dirs
+                cls.__INCLUDE_DIRS__.append(d)
         return code
 
     @classmethod
@@ -295,7 +318,7 @@ void backward (map_object, in float _input[INPUT_DIM], in float _output_grad[OUT
         if signature not in cls.__MAP_INSTANCES__:
             instance_id = len(cls.__MAP_INSTANCES__) + 1
             codename = f"{(type(map).__name__).replace('_','')}_{instance_id}" # 'rdv_map_' + str(instance_id)
-            cls.__CS_SUPER_KERNEL__ += cls.append_map_instance_source_code(map, instance_id, codename)
+            cls.__KERNELS__[signature] = cls.generate_map_instance_source_code(map, instance_id, codename)
             cls.__MAP_INSTANCES__[signature] = (instance_id, codename)
         return cls.__MAP_INSTANCES__[signature]
 
@@ -376,7 +399,7 @@ layout (local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
 int DEBUG_COUNTER = 0;
 
-        """ + cls.__CS_SUPER_KERNEL__ + f"""
+        """ + cls._generate_super_kernel(map) + f"""
 
 layout(set = 0, std430, binding = 0) uniform RayGenMainDispatching {{
     {cls.register_instance(map)[1]} main_map; // Map model to execute
@@ -416,6 +439,9 @@ void main()
 }}
         """
 
+        if __SHOW_CODE__:
+            print(full_code)
+
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
         pipeline = _vk.pipeline_compute()
@@ -450,7 +476,7 @@ void main()
     
     int DEBUG_COUNTER = 0;
 
-            """ + cls.__CS_SUPER_KERNEL__ + f"""
+            """ + cls._generate_super_kernel(map) + f"""
 
     layout(set = 0, std430, binding = 0) uniform BackwardMapEval {{
         {cls.register_instance(map)[1]} main_map; // Map model to execute
@@ -497,6 +523,8 @@ void main()
         }}
     }}
             """
+        if __SHOW_CODE__:
+            print(full_code)
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
@@ -533,7 +561,7 @@ void main()
         
         int DEBUG_COUNTER = 0;
 
-                """ + cls.__CS_SUPER_KERNEL__ + f"""
+                """ + cls._generate_super_kernel(capture_object, field) + f"""
 
         layout(set = 0, std430, binding = 0) uniform RayGenMainDispatching {{
             {cls.register_instance(capture_object)[1]} capture_object; // Map model to execute
@@ -619,6 +647,8 @@ void main()
             }}
         }}
                 """
+        if __SHOW_CODE__:
+            print(full_code)
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
@@ -655,7 +685,7 @@ void main()
         
         int DEBUG_COUNTER = 0;
 
-                """ + cls.__CS_SUPER_KERNEL__ + f"""
+                """ + cls._generate_super_kernel(capture_object, field) + f"""
 
         layout(set = 0, std430, binding = 0) uniform BackwardCaptureEval {{
             {cls.register_instance(capture_object)[1]} capture_object; // Map model to execute
@@ -729,6 +759,8 @@ void main()
             }}
         }}
                 """
+        if __SHOW_CODE__:
+            print(full_code)
 
         cls.ensure_engine_objects()
         # Build pipeline for forward map evaluation
@@ -784,8 +816,8 @@ void main()
             else:
                 output = _vk.tensor(*capture_object.index_shape[:capture_object.input_dim], field.output_dim, dtype=_torch.float)
 
-            capture_object._pre_eval(False)
-            field._pre_eval(False)
+            capture_object.pre_eval_all(False)
+            field.pre_eval_all(False)
 
             output_ptr = _vk.wrap_gpu(output, 'out')
 
@@ -813,8 +845,8 @@ void main()
             output_ptr.mark_as_dirty()
             output_ptr.invalidate()
 
-            capture_object._pos_eval(False)
-            field._pos_eval(False)
+            capture_object.pos_eval_all(False)
+            field.pos_eval_all(False)
 
             # if sensors is None:
             #     output = output.view(*capture_object.index_shape[:capture_object.input_dim],-1)
@@ -853,8 +885,8 @@ void main()
 
             # assert input.shape[-1] == map_object.input_dim, f'Wrong last dimension for the input tensor, must be {map_object.input_dim}'
 
-            capture_object._pre_eval(True)
-            field._pre_eval(True)
+            capture_object.pre_eval_all(True)
+            field.pre_eval_all(True)
             _torch.cuda.synchronize()
 
             with cls.__ENGINE_OBJECTS__['capture_bw_eval'] as b:
@@ -878,8 +910,8 @@ void main()
                     b.start_index = batch * batch_size
                 _vk.submit(man)
 
-            capture_object._pos_eval(True)
-            field._pos_eval(True)
+            capture_object.pos_eval_all(True)
+            field.pos_eval_all(True)
             _torch.cuda.synchronize()
 
     @classmethod
@@ -904,7 +936,7 @@ void main()
                    -1] == map_object.input_dim, f'Wrong last dimension for the input tensor, must be {map_object.input_dim}'
         output = _vk.tensor(*input.shape[:-1], map_object.output_dim, dtype=_torch.float)
 
-        map_object._pre_eval(False)
+        map_object.pre_eval_all(False)
 
         output_ptr = _vk.wrap_gpu(output, 'out')
 
@@ -918,7 +950,7 @@ void main()
 
         _vk.submit(man)
 
-        map_object._pos_eval(False)
+        map_object.pos_eval_all(False)
 
         output_ptr.mark_as_dirty()
         output_ptr.invalidate()
@@ -954,7 +986,7 @@ void main()
             else:
                 input_grad = None
 
-            map_object._pre_eval(True)
+            map_object.pre_eval_all(True)
 
             input_grad_ptr = _vk.wrap_gpu(input_grad, 'inout')
 
@@ -969,18 +1001,18 @@ void main()
 
             _vk.submit(man)
 
-            map_object._pos_eval(True)
+            map_object.pos_eval_all(True)
 
             input_grad_ptr.mark_as_dirty()
             input_grad_ptr.invalidate()
 
-            return input_grad
+            return None if input_grad is None else input_grad.clone()
 
 
-def start_engine():
+def start_session():
     if _torch.cuda.is_available():
         _torch.cuda.init()
-    DispatcherEngine.start()
+    DispatcherEngine.start_session()
 
 
 def map_struct(
@@ -1167,46 +1199,101 @@ class GPUDirectModule(_torch.nn.Module):
                     setattr(a, key, value)
         super().__setattr__(key, value)
 
+    def _dependences(self):
+        if hasattr(self, '_rdv_dependences'):
+            return self._rdv_dependences
+        dependences = set()
+        def collect(m: _typing.Union[_torch.nn.Module]):
+            if m is None:
+                return
+            if isinstance(m, GPUDirectModule):
+                for r in m._rdv_accessor.references():
+                    if r is not None:
+                        if isinstance(r.obj, MapBase):
+                            dependences.add(r.obj)
+                            collect(r.obj)
+            if isinstance(m, _torch.nn.ModuleList):
+                for c in m:
+                    collect(c)
+            for k, mo in m._modules.items():
+                if isinstance(mo, MapBase):
+                    dependences.add(mo)
+                collect(mo)
+        collect(self)
+        object.__setattr__(self, '_rdv_dependences', dependences)
+        return dependences
+
+    def pre_eval_all(self, include_grads: bool = False):
+        dependences = self._dependences()
+        for m in dependences:
+            m._pre_eval(include_grads)
+        self._pre_eval(include_grads)
+
     def _pre_eval(self, include_grads: bool = False):
         if include_grads:
-            for k,v in self._parameters.items():
+            for k, v in self._parameters.items():
                 if v.requires_grad:
                     # print(f'Bound parameter with grad for {k} in {type(self)}')
                     bind_parameter_grad(getattr(self._rdv_accessor, k))
-        def deep_pre_eval(m: _typing.Union[_torch.nn.Module]):
-            if isinstance(m, GPUDirectModule):
-                m._pre_eval(include_grads)
-            if isinstance(m, _torch.nn.ModuleList):
-                for c in m:
-                    deep_pre_eval(c)
-        for k, m in self._modules.items():
-            deep_pre_eval(m)
         # iterate over all potential wrapped objects that needs to update their info on the gpu
         for r in self._rdv_accessor.references():
             if r is not None:
                 r.flush()
+        # def deep_pre_eval(m: _torch.nn.Module):
+        #     if isinstance(m, GPUDirectModule):
+        #         for r in m._rdv_accessor.references():
+        #             if r is not None and isinstance(r.obj, GPUDirectModule):
+        #                 r.obj._pre_eval(include_grads)
+        #                 deep_pre_eval(r.obj)
+        #     if isinstance(m, _torch.nn.ModuleList):
+        #         for c in m:
+        #             if isinstance(c, GPUDirectModule):
+        #                 c._pre_eval(include_grads)
+        #             deep_pre_eval(c)
+        #     for k, mo in m._modules.items():
+        #         if isinstance(mo, GPUDirectModule):
+        #             mo._pre_eval(include_grads)
+        #         deep_pre_eval(mo)
+        # deep_pre_eval(self)
+
+
+    def pos_eval_all(self, include_grads: bool = False):
+        dependences = self._dependences()
+        for m in dependences:
+            m._pos_eval(include_grads)
+        self._pos_eval(include_grads)
 
     def _pos_eval(self, include_grads: bool = False):
-        def deep_pos_eval(m: _typing.Union[_torch.nn.Module]):
-            # if isinstance(m, GPUDirectModule):
-            #     m._pos_eval(include_grads)
-            if isinstance(m, _torch.nn.ModuleList):
-                for c in m:
-                    deep_pos_eval(c)
-            for k, mo in m._modules.items():
-                deep_pos_eval(mo)
-            # iterate over all potential wrapped objects that needs to update their info from the gpu
-            if isinstance(m, GPUDirectModule):
-                for r in self._rdv_accessor.references():
-                    if r is not None:
-                        if isinstance(r.obj, _torch.Tensor):
-                            assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
-                        r.mark_as_dirty()
-                        r.invalidate()
-                        if isinstance(r.obj, _torch.Tensor):
-                            assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
+        for r in self._rdv_accessor.references():
+            if r is not None:
+                if __ASSERT_NANS__:
+                    if isinstance(r.obj, _torch.Tensor):
+                        assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
+                r.mark_as_dirty()
+                r.invalidate()
+                if __ASSERT_NANS__:
+                    if isinstance(r.obj, _torch.Tensor):
+                        assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
 
-        deep_pos_eval(self)
+    # def deep_pos_eval(m: _typing.Union[_torch.nn.Module]):
+        #     if isinstance(m, _torch.nn.ModuleList):
+        #         for c in m:
+        #             deep_pos_eval(c)
+        #     for k, mo in m._modules.items():
+        #         deep_pos_eval(mo)
+        #     # iterate over all potential wrapped objects that needs to update their info from the gpu
+        #     if isinstance(m, GPUDirectModule):
+        #         for r in m._rdv_accessor.references():
+        #             if r is not None:
+        #                 if __ASSERT_NANS__:
+        #                     if isinstance(r.obj, _torch.Tensor):
+        #                         assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
+        #                 r.mark_as_dirty()
+        #                 r.invalidate()
+        #                 if __ASSERT_NANS__:
+        #                     if isinstance(r.obj, _torch.Tensor):
+        #                         assert _torch.isnan(r.obj).sum() == 0, f'Object {type(r.obj)} with nans, shape: {r.obj.shape}'
+        # deep_pos_eval(self)
 
 
 class MapBase(GPUDirectModule, metaclass=MapMeta):
@@ -1227,6 +1314,7 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
         object.__setattr__(self, '_rdv_trigger_bw', _torch.tensor([0.0], requires_grad=True))
         object.__setattr__(self, '_rdv_no_trigger_bw', _torch.tensor([0.0], requires_grad=False))
         object.__setattr__(self, 'generics', generics)
+        object.__setattr__(self, '_rdv_parameters_cache', None)
         super().__init__(map_buffer.accessor)
 
     def has_generic_submap(self):
@@ -1241,6 +1329,18 @@ class MapBase(GPUDirectModule, metaclass=MapMeta):
                 return deep_search(m)
             return False
         return deep_search(self)
+
+    def invalidate_parameters(self):
+        object.__setattr__(self, '_rdv_parameters_cache', None)
+
+    def parameters(self, recurse: bool = True):
+        if not recurse:
+            return super().parameters(False)
+        parameters_cache = object.__getattribute__(self, '_rdv_parameters_cache')
+        if not parameters_cache:
+            parameters_cache = list(super().parameters())
+            object.__setattr__(self, '_rdv_parameters_cache', parameters_cache)
+        return parameters_cache
 
     @_vk.lazy_constant
     def is_generic(self):
@@ -2429,7 +2529,8 @@ class Grid2D(MapBase):
             inv_bsize=vec2
         ),
         generics=dict(INPUT_DIM=2),
-        path=_internal.__INCLUDE_PATH__ + '/maps/grid2d.h'
+        path=_internal.__INCLUDE_PATH__ + '/maps/grid2d.h',
+        bw_implementations = BACKWARD_IMPLEMENTATIONS.DEFAULT,
     )
 
     def __init__(self, grid: _typing.Union[_torch.Tensor, _torch.nn.Parameter], bmin: vec2 = vec2(-1.0, -1.0), bmax: vec2 = vec2(1.0, 1.0)):
@@ -2642,7 +2743,7 @@ class ProjectiveField(MapBase):
         field = field.cast(input_dim=3)
         super().__init__(OUTPUT_DIM=field.output_dim)
         self.field = field
-        self.projection = projection.transpose(dim0=-1, dim1=-2)
+        self.projection = projection # .transpose(dim0=-1, dim1=-2)
 
     def cast(self, input_dim: _typing.Optional[int] = None, output_dim: _typing.Optional[int] = None):
         assert input_dim is None or input_dim == 3
